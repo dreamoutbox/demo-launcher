@@ -13,13 +13,13 @@
 	"queues": {
 		"producers": [
 			{
-				"binding": "MY_QUEUE",
-				"queue": "test-queue-2026-10",
+				"binding": "DEMO_LAUNCHER_QUEUE",
+				"queue": "demo-launcher-queue",
 			},
 		],
 		"consumers": [
 			{
-				"queue": "test-queue-2026-10",
+				"queue": "demo-launcher-queue",
 				"max_batch_size": 10,
 				"dead_letter_queue": "my-queue-dlq",
 			},

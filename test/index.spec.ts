@@ -35,8 +35,8 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 		vi.restoreAllMocks();
 	});
 
-	it('1. POST /api/launch should validate projectId and send a message to MY_QUEUE', async () => {
-		const sendSpy = vi.spyOn(testEnv.MY_QUEUE, 'send');
+	it('1. POST /api/launch should validate projectId and send a message to DEMO_LAUNCHER_QUEUE', async () => {
+		const sendSpy = vi.spyOn(testEnv.DEMO_LAUNCHER_QUEUE, 'send');
 
 		const req = new Request('http://localhost/api/launch', {
 			method: 'POST',

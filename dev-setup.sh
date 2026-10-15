@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+QUEUE_NAME="demo-launcher-queue"
 DB_NAME="mydb"
+
+npx wrangler queues create $QUEUE_NAME
 
 # create a new d1 database
 npx wrangler d1 create $DB_NAME

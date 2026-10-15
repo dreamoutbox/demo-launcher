@@ -15,7 +15,7 @@ export interface QueueMessage {
 
 export interface Env {
 	mydb: D1Database;
-	MY_QUEUE: Queue<QueueMessage>;
+	DEMO_LAUNCHER_QUEUE: Queue<QueueMessage>;
 	DO_API_KEY: string;
 	ENVIRONMENT?: 'development' | 'production';
 }

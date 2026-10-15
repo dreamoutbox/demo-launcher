@@ -155,7 +155,7 @@ export default {
 			}
 
 			// Enqueue launch job
-			await env.MY_QUEUE.send({ projectId: project.id });
+			await env.DEMO_LAUNCHER_QUEUE.send({ projectId: project.id });
 
 			return Response.json(
 				{
