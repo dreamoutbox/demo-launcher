@@ -7,6 +7,7 @@
 	"name": "demo-launcher-1",
 	"main": "src/index.ts",
 	"compatibility_date": "2026-10-06",
+	"keep_vars": true,
 	"observability": {
 		"logs": {
 			"enabled": true,
@@ -46,6 +47,9 @@
 	"triggers": {
 		"crons": ["*/5 * * * *"],
 	},
+	// "vars": {
+	// 	"ENVIRONMENT": "dev",
+	// },
 	/**
 	 * Smart Placement
 	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
