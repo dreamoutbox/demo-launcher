@@ -1,0 +1,20 @@
+{
+	"name": "demo-launcher-1",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"deploy": "wrangler deploy",
+		"dev": "wrangler dev",
+		"start": "wrangler dev",
+		"cf-typegen": "wrangler types"
+	},
+	"devDependencies": {
+		"@cloudflare/vitest-pool-workers": "^0.23.0",
+		"@cloudflare/workers-types": "^5.20261014.1",
+		"@types/node": "^26.6.5",
+		"typescript": "^5.5.2",
+		"vitest": "^4.1.0",
+		"wrangler": "^4.151.0"
+	}
+}
