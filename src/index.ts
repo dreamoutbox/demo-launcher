@@ -24,34 +24,123 @@ class Mutex {
 const workerMutex = new Mutex();
 
 /**
+ * Helper to check if we are running in local development mode
+ */
+function isDevelopment(env: Env, requestUrl?: string): boolean {
+	const isLocalHost = requestUrl ? ['localhost', '127.0.0.1'].includes(new URL(requestUrl).hostname) : false;
+	return env.ENVIRONMENT !== 'production' || isLocalHost;
+}
+
+/**
  * Factory that detects local `npx wrangler dev` vs production deployment
  */
 function getDigitalOceanService(env: Env, requestUrl?: string): IDigitalOceanService {
-	const isLocalHost = requestUrl ? ['localhost', '127.0.0.1'].includes(new URL(requestUrl).hostname) : false;
-	const isDev = env.ENVIRONMENT !== 'production' || isLocalHost;
-
-	if (isDev) {
+	if (isDevelopment(env, requestUrl)) {
 		return new DigitalOceanMockService(env.DO_API_KEY);
 	}
 	return new DigitalOceanProdService(env.DO_API_KEY);
 }
 
+/**
+ * Formats milliseconds into human-readable uptime (e.g., "1h 12m 5s" or "4s")
+ */
+function formatUptime(ms: number): string {
+	const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+	const hours = Math.floor(totalSeconds / 3600);
+	const minutes = Math.floor((totalSeconds % 3600) / 60);
+	const seconds = totalSeconds % 60;
+
+	const parts: string[] = [];
+	if (hours > 0) parts.push(`${hours}h`);
+	if (minutes > 0 || hours > 0) parts.push(`${minutes}m`);
+	parts.push(`${seconds}s`);
+	return parts.join(' ');
+}
+
+/**
+ * Reusable cleanup function for both Scheduled CRON and manual testing
+ */
+export async function cleanupExpiredDemos(
+	env: Env,
+	maxDemoTimeMs: number = MAX_DEMO_TIME,
+	requestUrl?: string,
+): Promise<{ cleanedUp: string[]; maxDemoTimeMs: number }> {
+	console.log(`[CRON] Checking for expired demo droplets (maxDemoTime: ${maxDemoTimeMs}ms)...`);
+	const doService = getDigitalOceanService(env, requestUrl);
+	const expirationThreshold = Date.now() - maxDemoTimeMs;
+
+	const { results } = await env.mydb
+		.prepare(
+			`SELECT project_id, droplet_id
+             FROM project_demos
+             WHERE status = 'RUNNING' AND launched_at <= ?1`,
+		)
+		.bind(expirationThreshold)
+		.all<{ project_id: string; droplet_id: number | null }>();
+
+	const cleanedUp: string[] = [];
+
+	for (const row of results) {
+		try {
+			if (row.droplet_id) {
+				await doService.deleteDroplet(row.droplet_id);
+			}
+
+			await env.mydb
+				.prepare(
+					`UPDATE project_demos
+                     SET status = 'STOPPED', droplet_id = NULL, droplet_ip = NULL, launched_at = NULL
+                     WHERE project_id = ?1`,
+				)
+				.bind(row.project_id)
+				.run();
+
+			cleanedUp.push(row.project_id);
+			console.log(`[CRON] Cleaned up expired demo "${row.project_id}" (Droplet ID: ${row.droplet_id})`);
+		} catch (err) {
+			console.error(`[CRON] Failed to clean up demo "${row.project_id}":`, err);
+		}
+	}
+
+	return { cleanedUp, maxDemoTimeMs };
+}
+
 export default {
 	async fetch(req, env, ctx): Promise<Response> {
-		const { pathname } = new URL(req.url);
+		const url = new URL(req.url);
+		const { pathname, searchParams } = url;
 
 		if (pathname === '/api/beverages') {
-			// If you did not use `DB` as your binding name, change it here
 			const { results } = await env.mydb.prepare('SELECT * FROM Customers WHERE CompanyName = ?').bind('Bs Beverages').run();
 			return Response.json(results);
 		}
 
-		// GET /api/projects -> List available projects and their current live demo status
+		// GET /api/projects -> List available projects and their current live demo status + uptime
 		if (pathname === '/api/projects' && req.method === 'GET') {
-			const { results } = await env.mydb.prepare('SELECT * FROM project_demos').all();
+			const now = Date.now();
+			const { results } = await env.mydb.prepare('SELECT * FROM project_demos').all<{
+				project_id: string;
+				status: string;
+				droplet_id: number | null;
+				droplet_ip: string | null;
+				launched_at: number | null;
+			}>();
+
+			const statusesWithUptime = results.map((row) => {
+				const isRunning = row.status === 'RUNNING' && row.launched_at !== null;
+				const uptimeMs = isRunning ? Math.max(0, now - row.launched_at!) : null;
+
+				return {
+					...row,
+					uptime_ms: uptimeMs,
+					uptime_seconds: uptimeMs !== null ? Math.floor(uptimeMs / 1000) : null,
+					uptime_human: uptimeMs !== null ? formatUptime(uptimeMs) : null,
+				};
+			});
+
 			return Response.json({
 				projects,
-				statuses: results,
+				statuses: statusesWithUptime,
 			});
 		}
 
@@ -77,7 +166,31 @@ export default {
 			);
 		}
 
-		return new Response('Use GET /api/projects or POST /api/launch to manage demos.');
+		// GET or POST /api/cron-cleanup -> Manually trigger cleanup with custom max demo time (Dev only)
+		if (pathname === '/api/cron-cleanup') {
+			if (!isDevelopment(env, req.url)) {
+				return Response.json({ error: 'Manual cron trigger is only allowed in development' }, { status: 403 });
+			}
+
+			// Accept ?maxDemoTimeSeconds=2 or ?maxDemoTimeMs=2000
+			const secondsParam = searchParams.get('maxDemoTimeSeconds');
+			const msParam = searchParams.get('maxDemoTimeMs');
+
+			let customMaxTimeMs = MAX_DEMO_TIME;
+			if (secondsParam !== null && !Number.isNaN(Number(secondsParam))) {
+				customMaxTimeMs = Number(secondsParam) * 1000;
+			} else if (msParam !== null && !Number.isNaN(Number(msParam))) {
+				customMaxTimeMs = Number(msParam);
+			}
+
+			const result = await cleanupExpiredDemos(env, customMaxTimeMs, req.url);
+			return Response.json({
+				message: 'Manual cron cleanup executed',
+				...result,
+			});
+		}
+
+		return new Response('Use GET /api/projects, POST /api/launch, or GET /api/cron-cleanup?maxDemoTimeSeconds=2');
 	},
 
 	async queue(batch, env): Promise<void> {
@@ -99,8 +212,7 @@ export default {
 			try {
 				const now = Date.now();
 
-				// Atomic check-and-set in D1 to prevent race conditions across distributed isolates:
-				// Only transitions to 'LAUNCHING' if row doesn't exist OR is currently 'STOPPED'/'FAILED'.
+				// Atomic check-and-set in D1 to prevent race conditions across distributed isolates
 				const lockResult = await env.mydb
 					.prepare(
 						`INSERT INTO project_demos (project_id, status, launched_at)
@@ -135,7 +247,6 @@ export default {
 				message.ack();
 			} catch (err) {
 				console.error(`[QUEUE] Failed to launch project "${project.id}":`, err);
-				// Mark as FAILED so a future click can retry
 				await env.mydb.prepare(`UPDATE project_demos SET status = 'FAILED' WHERE project_id = ?1`).bind(project.id).run();
 				message.retry();
 			} finally {
@@ -145,39 +256,6 @@ export default {
 	},
 
 	async scheduled(controller, env, ctx) {
-		console.log('[CRON] Checking for expired demo droplets...');
-		const doService = getDigitalOceanService(env);
-		const expirationThreshold = Date.now() - MAX_DEMO_TIME;
-
-		// Find all running demos that have exceeded MAX_DEMO_TIME (1 hour)
-		const { results } = await env.mydb
-			.prepare(
-				`SELECT project_id, droplet_id
-                 FROM project_demos
-                 WHERE status = 'RUNNING' AND launched_at <= ?1`,
-			)
-			.bind(expirationThreshold)
-			.all<{ project_id: string; droplet_id: number | null }>();
-
-		for (const row of results) {
-			try {
-				if (row.droplet_id) {
-					await doService.deleteDroplet(row.droplet_id);
-				}
-
-				await env.mydb
-					.prepare(
-						`UPDATE project_demos
-                         SET status = 'STOPPED', droplet_id = NULL, droplet_ip = NULL, launched_at = NULL
-                         WHERE project_id = ?1`,
-					)
-					.bind(row.project_id)
-					.run();
-
-				console.log(`[CRON] Cleaned up expired demo "${row.project_id}" (Droplet ID: ${row.droplet_id})`);
-			} catch (err) {
-				console.error(`[CRON] Failed to clean up demo "${row.project_id}":`, err);
-			}
-		}
+		await cleanupExpiredDemos(env, MAX_DEMO_TIME);
 	},
 } satisfies ExportedHandler<Env, QueueMessage>;
