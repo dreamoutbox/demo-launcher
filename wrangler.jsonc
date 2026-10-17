@@ -44,6 +44,20 @@
 			"database_id": "bed5fd0f-ddbf-401e-96e4-8cb1843a5245",
 		},
 	],
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "LAUNCHER",
+				"class_name": "ProjectLauncher",
+			},
+		],
+	},
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_classes": ["ProjectLauncher"],
+		},
+	],
 	"triggers": {
 		"crons": ["*/5 * * * *"],
 	},

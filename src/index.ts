@@ -1,45 +1,9 @@
 import projects from './projects.json';
-import { DigitalOceanMockService } from './digitalocean.mock';
-import { DigitalOceanProdService } from './digitalocean.prod';
-import { Env, IDigitalOceanService, QueueMessage } from './types';
+import { getDigitalOceanService, isDevelopment } from './digitalocean';
+import { Env, QueueMessage } from './types';
+export { ProjectLauncher } from './launcher';
 
 const MAX_DEMO_TIME = 60 * 60 * 1000; // 1 hour in milliseconds
-
-// In-memory mutex lock to serialize access within the same Worker isolate
-class Mutex {
-	private queue: Promise<void> = Promise.resolve();
-
-	async lock(): Promise<() => void> {
-		let unlockNext!: () => void;
-		const nextLock = new Promise<void>((resolve) => {
-			unlockNext = resolve;
-		});
-		const willWait = this.queue;
-		this.queue = this.queue.then(() => nextLock);
-		await willWait;
-		return unlockNext;
-	}
-}
-
-const workerMutex = new Mutex();
-
-/**
- * Helper to check if we are running in local development mode
- */
-function isDevelopment(env: Env, requestUrl?: string): boolean {
-	const isLocalHost = requestUrl ? ['localhost', '127.0.0.1'].includes(new URL(requestUrl).hostname) : false;
-	return env.ENVIRONMENT !== 'production' || isLocalHost;
-}
-
-/**
- * Factory that detects local `npx wrangler dev` vs production deployment
- */
-function getDigitalOceanService(env: Env, requestUrl?: string): IDigitalOceanService {
-	if (isDevelopment(env, requestUrl)) {
-		return new DigitalOceanMockService(env.DO_API_KEY);
-	}
-	return new DigitalOceanProdService(env.DO_API_KEY);
-}
 
 /**
  * Formats milliseconds into human-readable uptime (e.g., "1h 12m 5s" or "4s")
@@ -194,63 +158,18 @@ export default {
 	},
 
 	async queue(batch, env): Promise<void> {
-		const doService = getDigitalOceanService(env);
-
-		for (let message of batch.messages) {
+		for (const message of batch.messages) {
 			const { projectId } = message.body;
-			const project = projects.find((p) => p.id === projectId);
 
-			if (!project) {
-				console.error(`[QUEUE] Project "${projectId}" not found in src/projects.json. Skipping.`);
-				message.ack();
-				continue;
-			}
-
-			// Acquire isolate mutex lock to prevent concurrent processing in the same Worker
-			const unlock = await workerMutex.lock();
+			// Route to a per-project Durable Object to serialize and coordinate launches
+			const stub = env.LAUNCHER.get(env.LAUNCHER.idFromName(projectId));
 
 			try {
-				const now = Date.now();
-
-				// Atomic check-and-set in D1 to prevent race conditions across distributed isolates
-				const lockResult = await env.mydb
-					.prepare(
-						`INSERT INTO project_demos (project_id, status, launched_at)
-                         VALUES (?1, 'LAUNCHING', ?2)
-                         ON CONFLICT(project_id) DO UPDATE
-                         SET status = 'LAUNCHING', launched_at = ?2
-                         WHERE project_demos.status IN ('STOPPED', 'FAILED')`,
-					)
-					.bind(project.id, now)
-					.run();
-
-				if (lockResult.meta.changes === 0) {
-					console.log(`[QUEUE] Project "${project.id}" is already LAUNCHING or RUNNING. Skipping.`);
-					message.ack();
-					continue;
-				}
-
-				console.log(`[QUEUE] Launching DigitalOcean droplet for "${project.id}"...`);
-				const droplet = await doService.createDroplet(project.id, project.repoUrl);
-
-				// Store droplet ID, IP, and timestamp for cleanup later
-				await env.mydb
-					.prepare(
-						`UPDATE project_demos
-                         SET status = 'RUNNING', droplet_id = ?1, droplet_ip = ?2, launched_at = ?3
-                         WHERE project_id = ?4`,
-					)
-					.bind(droplet.id, droplet.ip, Date.now(), project.id)
-					.run();
-
-				console.log(`[QUEUE] Project "${project.id}" is RUNNING at IP ${droplet.ip} (Droplet ID: ${droplet.id})`);
+				await stub.launch(projectId);
 				message.ack();
 			} catch (err) {
-				console.error(`[QUEUE] Failed to launch project "${project.id}":`, err);
-				await env.mydb.prepare(`UPDATE project_demos SET status = 'FAILED' WHERE project_id = ?1`).bind(project.id).run();
+				console.error(`[QUEUE] launch failed for "${projectId}":`, err);
 				message.retry();
-			} finally {
-				unlock();
 			}
 		}
 	},
