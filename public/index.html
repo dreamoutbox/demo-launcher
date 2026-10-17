@@ -1,44 +1,58 @@
 <!doctype html>
 <html lang="en">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>GitHub Project Demo Launcher</title>
-		<link rel="stylesheet" href="/main.css" />
-	</head>
-	<body>
-		<div class="container">
-			<h1>GitHub Project Demo Launcher</h1>
 
-			<!-- VIEW 1: Project List -->
-			<div id="list-view">
-				<p>Select a project below to launch a live demo instance:</p>
-				<div id="projects-container">Loading projects...</div>
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>GitHub Project Demo Launcher</title>
+	<link rel="stylesheet" href="/main.css" />
+	<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+</head>
+
+<body>
+	<div class="container">
+		<h1>GitHub Project Demo Launcher</h1>
+
+		<!-- VIEW 1: Project List -->
+		<div id="list-view">
+			<p>Select a project below to launch a live demo instance:</p>
+
+			<!-- Cloudflare Turnstile Protection -->
+			<div class="turnstile-wrapper">
+				<div id="turnstile-widget" class="cf-turnstile" data-sitekey="1x00000000000000000000AA"
+					data-callback="onTurnstileSuccess" data-expired-callback="onTurnstileExpired"
+					data-error-callback="onTurnstileError"></div>
+				<div id="turnstile-error" class="turnstile-error hidden"></div>
 			</div>
 
-			<!-- VIEW 2: Project Launch & Status Page -->
-			<div id="detail-view" class="hidden">
-				<p><button id="back-btn" type="button">&larr; Back to Projects</button></p>
-
-				<h2 id="detail-title">Project Name</h2>
-				<p>Repository: <a id="detail-repo" href="#" target="_blank" rel="noopener noreferrer"></a></p>
-
-				<div class="status-box">
-					<p><strong>Status:</strong> <span id="detail-status">Checking...</span></p>
-					<p><strong>Droplet IP:</strong> <span id="detail-ip">Fetching droplet IP...</span></p>
-					<p><strong>Uptime:</strong> <span id="detail-uptime">-</span></p>
-					<p><strong>Max Demo Time:</strong> <span id="detail-max-time">1 hour (60 minutes)</span></p>
-
-					<div id="open-ip-container" class="hidden">
-						<a id="open-ip-btn" class="button-link" href="#" target="_blank" rel="noopener noreferrer"> Open Demo in New Tab &nearr; </a>
-					</div>
-				</div>
-
-				<h3>Project README</h3>
-				<pre id="detail-readme">Loading README...</pre>
-			</div>
+			<div id="projects-container">Loading projects...</div>
 		</div>
 
-		<script src="/main.js"></script>
-	</body>
+		<!-- VIEW 2: Project Launch & Status Page -->
+		<div id="detail-view" class="hidden">
+			<p><button id="back-btn" type="button">&larr; Back to Projects</button></p>
+
+			<h2 id="detail-title">Project Name</h2>
+			<p>Repository: <a id="detail-repo" href="#" target="_blank" rel="noopener noreferrer"></a></p>
+
+			<div class="status-box">
+				<p><strong>Status:</strong> <span id="detail-status">Checking...</span></p>
+				<p><strong>Droplet IP:</strong> <span id="detail-ip">Fetching droplet IP...</span></p>
+				<p><strong>Uptime:</strong> <span id="detail-uptime">-</span></p>
+				<p><strong>Max Demo Time:</strong> <span id="detail-max-time">1 hour (60 minutes)</span></p>
+
+				<div id="open-ip-container" class="hidden">
+					<a id="open-ip-btn" class="button-link" href="#" target="_blank" rel="noopener noreferrer"> Open
+						Demo in New Tab &nearr; </a>
+				</div>
+			</div>
+
+			<h3>Project README</h3>
+			<pre id="detail-readme">Loading README...</pre>
+		</div>
+	</div>
+
+	<script src="/main.js"></script>
+</body>
+
 </html>

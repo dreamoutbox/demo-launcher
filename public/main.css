@@ -73,3 +73,16 @@ pre#detail-readme {
   font-family: monospace;
   font-size: 13px;
 }
+
+.turnstile-wrapper {
+  margin: 16px 0;
+}
+
+.turnstile-error {
+  color: #c00;
+  background-color: #fee;
+  border: 1px solid #fcc;
+  padding: 8px 12px;
+  font-size: 14px;
+  margin-top: 8px;
+}

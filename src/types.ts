@@ -19,6 +19,8 @@ export interface Env {
 	LAUNCHER: DurableObjectNamespace<import('./launcher').ProjectLauncher>;
 	DO_API_KEY: string;
 	ENVIRONMENT?: 'development' | 'production';
+	TURNSTILE_SECRET_KEY?: string;
+	TURNSTILE_SITE_KEY?: string;
 }
 
 /**

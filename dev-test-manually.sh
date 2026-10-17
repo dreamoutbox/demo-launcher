@@ -52,10 +52,24 @@ for i in {1..30}; do
 done
 
 # 3. Launch the demo project
-log_step "3. Sending POST /api/launch for '${PROJECT_ID}'..."
-LAUNCH_RES=$(curl -s -X POST "${BASE_URL}/api/launch" \
+log_step "3. Verifying POST /api/launch rejects request without Turnstile token..."
+NO_TOKEN_RES=$(curl -s -w "\n%{http_code}" -X POST "${BASE_URL}/api/launch" \
   -H "Content-Type: application/json" \
   -d "{\"projectId\": \"${PROJECT_ID}\"}")
+HTTP_CODE=$(echo "${NO_TOKEN_RES}" | tail -n1)
+BODY=$(echo "${NO_TOKEN_RES}" | sed '$d')
+echo "${BODY}" | jq .
+
+if [ "${HTTP_CODE}" -eq 400 ]; then
+    pass "Request without Turnstile token rejected with HTTP 400"
+else
+    fail "Expected HTTP 400 for missing Turnstile token, got ${HTTP_CODE}"
+fi
+
+log_step "3b. Sending POST /api/launch for '${PROJECT_ID}' with Turnstile token..."
+LAUNCH_RES=$(curl -s -X POST "${BASE_URL}/api/launch" \
+  -H "Content-Type: application/json" \
+  -d "{\"projectId\": \"${PROJECT_ID}\", \"turnstileToken\": \"local-test-token\"}")
 
 echo "${LAUNCH_RES}" | jq .
 
@@ -118,7 +132,7 @@ echo "${FINAL_PROJECTS_RES}" | jq -e \
 log_step "10. Re-launching '${PROJECT_ID}' via POST /api/launch to confirm re-launch works..."
 RELAUNCH_RES=$(curl -s -X POST "${BASE_URL}/api/launch" \
   -H "Content-Type: application/json" \
-  -d "{\"projectId\": \"${PROJECT_ID}\"}")
+  -d "{\"projectId\": \"${PROJECT_ID}\", \"turnstileToken\": \"local-test-token\"}")
 echo "${RELAUNCH_RES}" | jq .
 
 echo -e "\n\033[1;32m🎉 ALL E2E CHECKS PASSED SUCCESSFULLY!\033[0m"

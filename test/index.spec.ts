@@ -35,9 +35,7 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 		vi.restoreAllMocks();
 	});
 
-	it('1. POST /api/launch should validate projectId and send a message to DEMO_LAUNCHER_QUEUE', async () => {
-		const sendSpy = vi.spyOn(testEnv.DEMO_LAUNCHER_QUEUE, 'send');
-
+	it('1a. POST /api/launch should reject when Turnstile token is missing', async () => {
 		const req = new Request('http://localhost/api/launch', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
@@ -45,13 +43,79 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 		});
 
 		const ctx = createExecutionContext();
-		const res = await worker.fetch(req, testEnv, ctx);
+		const res = await worker.fetch(req as any, testEnv, ctx);
+		await waitOnExecutionContext(ctx);
+
+		expect(res.status).toBe(400);
+		const data = (await res.json()) as { error: string };
+		expect(data.error).toBe('Turnstile token is required');
+	});
+
+	it('1b. POST /api/launch should bypass Turnstile check in dev and enqueue launch when token is supplied', async () => {
+		const sendSpy = vi.spyOn(testEnv.DEMO_LAUNCHER_QUEUE, 'send');
+
+		const req = new Request('http://localhost/api/launch', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ projectId: testProject.id, turnstileToken: 'dev-token' }),
+		});
+
+		const ctx = createExecutionContext();
+		const res = await worker.fetch(req as any, testEnv, ctx);
 		await waitOnExecutionContext(ctx);
 
 		expect(res.status).toBe(202);
 		const data = (await res.json()) as { projectId: string; message: string };
 		expect(data.projectId).toBe(testProject.id);
 		expect(sendSpy).toHaveBeenCalledWith({ projectId: testProject.id });
+	});
+
+	it('1c. POST /api/launch in production should verify token with Cloudflare siteverify', async () => {
+		const prodEnv: Env = {
+			...testEnv,
+			ENVIRONMENT: 'production',
+			TURNSTILE_SECRET_KEY: 'test-secret',
+		};
+
+		const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+			new Response(JSON.stringify({ success: false, 'error-codes': ['invalid-input-response'] }), {
+				status: 200,
+				headers: { 'Content-Type': 'application/json' },
+			}),
+		);
+
+		const reqFail = new Request('http://localhost/api/launch', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ projectId: testProject.id, turnstileToken: 'invalid-token' }),
+		});
+
+		const ctx1 = createExecutionContext();
+		const resFail = await worker.fetch(reqFail as any, prodEnv, ctx1);
+		await waitOnExecutionContext(ctx1);
+
+		expect(resFail.status).toBe(403);
+		const dataFail = (await resFail.json()) as { error: string };
+		expect(dataFail.error).toBe('Turnstile verification failed');
+
+		fetchSpy.mockResolvedValueOnce(
+			new Response(JSON.stringify({ success: true }), {
+				status: 200,
+				headers: { 'Content-Type': 'application/json' },
+			}),
+		);
+
+		const reqSuccess = new Request('http://localhost/api/launch', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ projectId: testProject.id, turnstileToken: 'valid-token' }),
+		});
+
+		const ctx2 = createExecutionContext();
+		const resSuccess = await worker.fetch(reqSuccess as any, prodEnv, ctx2);
+		await waitOnExecutionContext(ctx2);
+
+		expect(resSuccess.status).toBe(202);
 	});
 
 	it('2. Queue consumer should create a mock droplet and save IP + RUNNING status in D1', async () => {

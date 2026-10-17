@@ -55,11 +55,15 @@
 	"migrations": [
 		{
 			"tag": "v1",
-			"new_classes": ["ProjectLauncher"],
+			"new_classes": [
+				"ProjectLauncher"
+			],
 		},
 	],
 	"triggers": {
-		"crons": ["*/5 * * * *"],
+		"crons": [
+			"*/5 * * * *"
+		],
 	},
 	// "vars": {
 	// 	"ENVIRONMENT": "dev",

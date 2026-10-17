@@ -17,6 +17,50 @@ const detailMaxTime = document.getElementById('detail-max-time');
 const openIpContainer = document.getElementById('open-ip-container');
 const openIpBtn = document.getElementById('open-ip-btn');
 const detailReadme = document.getElementById('detail-readme');
+const turnstileError = document.getElementById('turnstile-error');
+
+let currentTurnstileToken = null;
+
+// Turnstile callbacks attached to global window for implicit widget
+window.onTurnstileSuccess = function (token) {
+	currentTurnstileToken = token;
+	clearTurnstileError();
+};
+
+window.onTurnstileExpired = function () {
+	currentTurnstileToken = null;
+};
+
+window.onTurnstileError = function () {
+	currentTurnstileToken = null;
+	showTurnstileError('Turnstile challenge encountered an error. Please retry.');
+};
+
+function showTurnstileError(msg) {
+	if (turnstileError) {
+		turnstileError.textContent = msg;
+		turnstileError.classList.remove('hidden');
+	}
+}
+
+function clearTurnstileError() {
+	if (turnstileError) {
+		turnstileError.textContent = '';
+		turnstileError.classList.add('hidden');
+	}
+}
+
+function resetTurnstile() {
+	currentTurnstileToken = null;
+	clearTurnstileError();
+	if (window.turnstile && typeof window.turnstile.reset === 'function') {
+		try {
+			window.turnstile.reset();
+		} catch (err) {
+			console.warn('Turnstile reset error:', err);
+		}
+	}
+}
 
 // Load initial project list
 async function loadProjectList() {
@@ -49,8 +93,13 @@ async function loadProjectList() {
 
 			const launchBtn = document.createElement('button');
 			launchBtn.type = 'button';
-			launchBtn.textContent = currentStatus === 'RUNNING' ? 'View Running Demo' : 'Launch Demo';
-			launchBtn.addEventListener('click', () => handleLaunchClick(project));
+			if (currentStatus === 'RUNNING') {
+				launchBtn.textContent = 'View Running Demo';
+				launchBtn.addEventListener('click', () => handleViewClick(project));
+			} else {
+				launchBtn.textContent = 'Launch Demo';
+				launchBtn.addEventListener('click', () => handleLaunchClick(project));
+			}
 
 			row.appendChild(info);
 			row.appendChild(launchBtn);
@@ -61,8 +110,41 @@ async function loadProjectList() {
 	}
 }
 
+// Navigates directly to detail view for already running demos
+async function handleViewClick(project) {
+	activeProjectId = project.id;
+
+	listView.classList.add('hidden');
+	detailView.classList.remove('hidden');
+
+	detailTitle.textContent = project.name;
+	detailRepo.textContent = project.repoUrl;
+	detailRepo.href = project.repoUrl.replace(/\.git$/, '');
+	detailStatus.textContent = 'CHECKING...';
+	detailIp.textContent = 'Fetching droplet IP...';
+	detailUptime.textContent = '-';
+	detailMaxTime.textContent = MAX_DEMO_TIME_LABEL;
+	openIpContainer.classList.add('hidden');
+
+	fetchProjectReadme(project.repoUrl);
+
+	await pollProjectStatus();
+	if (pollTimer) clearInterval(pollTimer);
+	pollTimer = setInterval(pollProjectStatus, 2000);
+}
+
 // Triggered when user clicks Launch on a project
 async function handleLaunchClick(project) {
+	const token =
+		currentTurnstileToken ||
+		(window.turnstile && typeof window.turnstile.getResponse === 'function' ? window.turnstile.getResponse() : null);
+
+	if (!token) {
+		showTurnstileError('Please complete the Cloudflare Turnstile challenge before launching a demo.');
+		return;
+	}
+
+	clearTurnstileError();
 	activeProjectId = project.id;
 
 	// Switch to detail page immediately
@@ -81,16 +163,32 @@ async function handleLaunchClick(project) {
 	// Fetch GitHub README in parallel
 	fetchProjectReadme(project.repoUrl);
 
-	// Send POST /api/launch
+	// Send POST /api/launch with Turnstile token
 	try {
-		await fetch('/api/launch', {
+		const res = await fetch('/api/launch', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ projectId: project.id }),
+			body: JSON.stringify({
+				projectId: project.id,
+				turnstileToken: token,
+				'cf-turnstile-response': token,
+			}),
 		});
+
+		if (!res.ok) {
+			const errData = await res.json().catch(() => ({}));
+			detailStatus.textContent = 'Launch rejected: ' + (errData.error || res.statusText);
+			resetTurnstile();
+			return;
+		}
 	} catch (err) {
 		detailStatus.textContent = 'Error sending launch request: ' + err.message;
+		resetTurnstile();
+		return;
 	}
+
+	// Reset widget so next launch requires fresh verification
+	resetTurnstile();
 
 	// Poll status every 2 seconds to fetch droplet IP and update uptime
 	await pollProjectStatus();
@@ -175,6 +273,7 @@ backBtn.addEventListener('click', () => {
 	}
 	detailView.classList.add('hidden');
 	listView.classList.remove('hidden');
+	resetTurnstile();
 	loadProjectList();
 });
 

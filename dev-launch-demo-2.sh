@@ -3,6 +3,6 @@ set -euo pipefail
 
 curl -s "http://localhost:8787/api/launch" \
     -H "Content-Type: application/json" \
-    -d '{"projectId": "realtime-chat-app"}' \
+    -d '{"projectId": "realtime-chat-app", "turnstileToken": "local-dev-token"}' \
     | jq .
     

@@ -1,6 +1,8 @@
 import projects from './projects.json';
-import { getDigitalOceanService, isDevelopment } from './digitalocean';
+import { getDigitalOceanService } from './digitalocean';
+import { isDevelopment } from './helper';
 import { Env, QueueMessage } from './types';
+import { verifyTurnstileToken, TurnstileStatus } from './turnstile';
 export { ProjectLauncher } from './launcher';
 
 const MAX_DEMO_TIME = 60 * 60 * 1000; // 1 hour in milliseconds
@@ -105,14 +107,35 @@ export default {
 			return Response.json({
 				projects,
 				statuses: statusesWithUptime,
+				turnstileSiteKey: env.TURNSTILE_SITE_KEY || '1x00000000000000000000AA',
 			});
 		}
 
 		// POST /api/launch -> Triggered when user clicks a project launch button
 		if (pathname === '/api/launch' && req.method === 'POST') {
-			const body = (await req.json().catch(() => null)) as { projectId?: string } | null;
-			const projectId = body?.projectId;
+			const body = (await req.json().catch(() => null)) as {
+				projectId?: string;
+				turnstileToken?: string;
+				'cf-turnstile-response'?: string;
+			} | null;
 
+			const token = body?.turnstileToken || body?.['cf-turnstile-response'];
+			const clientIp = req.headers.get('CF-Connecting-IP') ?? undefined;
+			const verification = await verifyTurnstileToken(token, env, clientIp);
+
+			if (!verification.success) {
+				const isMissing = verification.status === TurnstileStatus.MISSING_TOKEN;
+				return Response.json(
+					{
+						error: isMissing ? 'Turnstile token is required' : 'Turnstile verification failed',
+						status: verification.status,
+						errorCodes: verification.errorCodes,
+					},
+					{ status: isMissing ? 400 : 403 },
+				);
+			}
+
+			const projectId = body?.projectId;
 			const project = projects.find((p) => p.id === projectId);
 			if (!project) {
 				return Response.json({ error: 'Invalid or unknown projectId' }, { status: 400 });
@@ -157,7 +180,7 @@ export default {
 		return new Response('Use GET /api/projects, POST /api/launch, or GET /api/cron-cleanup?maxDemoTimeSeconds=2');
 	},
 
-	async queue(batch, env): Promise<void> {
+	async queue(batch, env, ctx): Promise<void> {
 		for (const message of batch.messages) {
 			const { projectId } = message.body;
 

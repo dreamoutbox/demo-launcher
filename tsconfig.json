@@ -33,7 +33,8 @@
 		"skipLibCheck": true,
 		"types": [
 			"./worker-configuration.d.ts",
-			"node"
+			"node",
+			"@cloudflare/vitest-plugin/types"
 		]
 		// ------------------------------------
 		// "allowImportingTsExtensions": true,
