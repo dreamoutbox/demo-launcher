@@ -64,3 +64,8 @@ If the application uses Durable Objects or Workflows, refer to the relevant best
 - don't update `src/types.ts` manually. use `pnpm types` to update
 
 - write helper functions in `src/helper.ts`
+
+## Frontend Styling
+
+- Keep frontend styling plain, clean, and minimal. No fancy CSS (no glassmorphism, gradients, glow effects, or dark themes). Match the simple aesthetic of `public/index.html` and `public/main.css`.
+- Use `public/main.css` for shared styles. Avoid inline SVG icons, complex design frameworks, or external font CDNs when simple semantic HTML elements suffice.

@@ -86,3 +86,151 @@ pre#detail-readme {
   font-size: 14px;
   margin-top: 8px;
 }
+
+.container-wide {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+input[type="text"],
+input[type="password"],
+input[type="number"],
+select {
+  font-family: inherit;
+  font-size: 14px;
+  padding: 6px 10px;
+  border: 1px solid #ccc;
+  background-color: #fff;
+  color: #111;
+  box-sizing: border-box;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button.btn-sm {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 13px;
+}
+
+th,
+td {
+  border: 1px solid #ccc;
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  background-color: #f5f5f5;
+  font-weight: bold;
+}
+
+tr:nth-child(even) {
+  background-color: #fafafa;
+}
+
+.table-container {
+  overflow-x: auto;
+}
+
+.badge-queued {
+  color: #006600;
+  font-weight: bold;
+}
+
+.badge-rejected {
+  color: #cc0000;
+  font-weight: bold;
+}
+
+.time-relative {
+  color: #666;
+  font-size: 11px;
+}
+
+.user-agent-text {
+  max-width: 250px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: #555;
+}
+
+.code-pill {
+  font-family: monospace;
+  background: #eee;
+  padding: 2px 4px;
+  font-size: 12px;
+}
+
+.ip-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 100;
+}
+
+.modal-content {
+  background: #fff;
+  border: 1px solid #999;
+  max-width: 700px;
+  width: 100%;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #ccc;
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+}
+
+.modal-header h3 {
+  margin: 0;
+}
+
+.modal-body {
+  overflow-y: auto;
+}
+
+pre.json-viewer {
+  border: 1px solid #ccc;
+  background-color: #f5f5f5;
+  padding: 12px;
+  margin: 0;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: monospace;
+  font-size: 12px;
+}

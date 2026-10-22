@@ -22,10 +22,16 @@
 
 - [x] add ping health check
 
+- [ ] make projects.json as secret. use `npx wrangler secret put PROJECTS_JSON < projects.json`
+
+- [ ] add shell script for update `PROJECTS_JSON` secret.
+
+- [ ] make `dev.sh` script update local `PROJECTS_JSON` secret.
+
 - [ ] env secret support. add secret env to demo server.
 
 # CHORE
 
-- [ ] make admin page use basic main.css
+- [x] make admin page use basic main.css
 
-- [ ] add manual cron cleanup button to admin page.
+- [x] add manual cron cleanup button to admin page.

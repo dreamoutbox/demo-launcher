@@ -21,14 +21,14 @@ declare namespace Cloudflare {
 		mainModule: typeof import("./src/index");
 		durableNamespaces: "ProjectLauncher";
 	}
-	interface Env extends __BaseEnv_Env { }
+	interface Env extends __BaseEnv_Env {}
 }
-interface Env extends __BaseEnv_Env { }
+interface Env extends __BaseEnv_Env {}
 type StringifyValues<EnvType extends Record<string, unknown>> = {
 	[Binding in keyof EnvType]: EnvType[Binding] extends string ? EnvType[Binding] : string;
 };
 declare namespace NodeJS {
-	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "DO_REGION" | "DO_SIZE" | "DO_IMAGE" | "MAX_DEMO_TIME_SECONDS" | "DO_API_KEY" | "DO_USE_REAL_API" | "ADMIN_KEY" | "DROPLET_SSH_PUBLIC_KEY" | "DROPLET_SSH_PRIVATE_KEY">> { }
+	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "DO_REGION" | "DO_SIZE" | "DO_IMAGE" | "MAX_DEMO_TIME_SECONDS" | "DO_API_KEY" | "DO_USE_REAL_API" | "ADMIN_KEY" | "DROPLET_SSH_PUBLIC_KEY" | "DROPLET_SSH_PRIVATE_KEY">> {}
 }
 declare module "*.txt" {
 	const value: string;
