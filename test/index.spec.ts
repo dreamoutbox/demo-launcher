@@ -167,7 +167,7 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 		expect(result.ackAll).toBe(false);
 		expect(result.explicitAcks).toContain('msg-1');
 		expect(createDropletSpy).toHaveBeenCalledTimes(1);
-		expect(createDropletSpy).toHaveBeenCalledWith(testProject.id, testProject.repoUrl);
+		expect(createDropletSpy).toHaveBeenCalledWith(testProject.id, testProject.repoUrl, testProject.size);
 
 		// Verify D1 row was updated to RUNNING with droplet info
 		const row = await testEnv.mydb.prepare('SELECT * FROM project_demos WHERE project_id = ?1').bind(testProject.id).first<{

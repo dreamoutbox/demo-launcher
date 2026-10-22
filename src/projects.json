@@ -4,6 +4,15 @@
     "name": "demo-launcher-simple-project",
     "repoUrl": "https://github.com/dreamoutbox/demo-launcher-simple-project",
     "healthcheckPort": "80",
-    "healthcheckPath": "/healthz"
+    "healthcheckPath": "/healthz",
+    "size": "s-1vcpu-1gb"
+  },
+  {
+    "id": "go-pos",
+    "name": "go-pos",
+    "repoUrl": "https://github.com/dreamoutbox/go-pos",
+    "healthcheckPort": "80",
+    "healthcheckPath": "/healthz",
+    "size": "s-1vcpu-2gb"
   }
 ]

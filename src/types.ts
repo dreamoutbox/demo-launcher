@@ -6,7 +6,7 @@ export interface DropletInfo {
 }
 
 export interface IDigitalOceanService {
-	createDroplet(projectId: string, repoUrl: string): Promise<DropletInfo>;
+	createDroplet(projectId: string, repoUrl: string, size?: string): Promise<DropletInfo>;
 	deleteDroplet(dropletId: number): Promise<void>;
 }
 

@@ -45,7 +45,7 @@ export class ProjectLauncher extends DurableObject<Env> {
 
 			//TODO: this can be failed (DO API error / exceeds droplets limit / etc) make this not consume queue message and retry later
 			//TODO: limit retry to env.DO_MAX_DROPLET_CREATE_ATTEMPT
-			const droplet = await doService.createDroplet(project.id, project.repoUrl);
+			const droplet = await doService.createDroplet(project.id, project.repoUrl, project.size);
 
 			await this.env.mydb
 				.prepare(

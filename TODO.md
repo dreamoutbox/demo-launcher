@@ -16,7 +16,7 @@
 
 - [x] allow time range schedule, env `LAUNCH_ALLOW_TIME_RANGE=07:00:00-20:00:00,21:00:00-23:00:00`
 
-- [ ] custom machine types in projects.json
+- [x] custom machine types in projects.json
 
 - [ ] convert `MAX_DEMO_TIME` to ENV var
 

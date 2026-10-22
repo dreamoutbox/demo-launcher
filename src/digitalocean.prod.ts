@@ -325,7 +325,7 @@ export class DigitalOceanProdService implements IDigitalOceanService {
 		throw new Error(`DigitalOcean ensureFirewall failed (${createRes.status}): ${errText}`);
 	}
 
-	async createDroplet(projectId: string, repoUrl: string): Promise<DropletInfo> {
+	async createDroplet(projectId: string, repoUrl: string, size?: string): Promise<DropletInfo> {
 		const userData = buildStartupScript(repoUrl);
 
 		// Ensure firewall exists and is tagged before provisioning droplet
@@ -342,7 +342,7 @@ export class DigitalOceanProdService implements IDigitalOceanService {
 		const dropletPayload: Record<string, unknown> = {
 			name: `demo-${projectId}-${Date.now()}`,
 			region: this.region,
-			size: this.size,
+			size: size || this.size,
 			image: this.image,
 			user_data: userData,
 			tags,
