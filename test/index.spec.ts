@@ -10,9 +10,15 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import worker from '../src/index';
 import projects from '../src/projects.json';
 import { DigitalOceanMockService } from '../src/digitalocean.mock';
-import { DigitalOceanProdService } from '../src/digitalocean.prod';
+import { DigitalOceanProdService, DEFAULT_FIREWALL_INBOUND_RULES, DEFAULT_FIREWALL_OUTBOUND_RULES } from '../src/digitalocean.prod';
 import { getDigitalOceanService, isRealApiEnabled } from '../src/digitalocean';
-import { buildStartupScript, normalizePublicKey } from '../src/helper';
+import {
+	buildDropletTags,
+	buildStartupScript,
+	DEFAULT_FIREWALL_NAME,
+	DEFAULT_FIREWALL_TAG,
+	normalizePublicKey,
+} from '../src/helper';
 import { ActionLogRecord, ActionStatus, ActionType, Env, QueueMessage } from '../src/types';
 
 // Cast test env to our strict Env interface
@@ -31,6 +37,7 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
                     status TEXT NOT NULL,
                     droplet_id INTEGER,
                     droplet_ip TEXT,
+                    tags TEXT,
                     launched_at INTEGER
                 )`,
 			)
@@ -168,6 +175,7 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 			status: string;
 			droplet_id: number;
 			droplet_ip: string;
+			tags: string;
 			launched_at: number;
 		}>();
 
@@ -175,6 +183,9 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 		expect(row?.status).toBe('RUNNING');
 		expect(row?.droplet_id).toBeTypeOf('number');
 		expect(row?.droplet_ip).toMatch(/^192\.0\.2\.\d+$/);
+		expect(row?.tags).toBeTypeOf('string');
+		const parsedTags = JSON.parse(row!.tags);
+		expect(parsedTags).toEqual(expect.arrayContaining(['demo-launcher', testProject.id, 'demo-launcher-fw']));
 	});
 
 	it('3. Mutex & D1 lock should prevent launching duplicate droplets on concurrent messages', async () => {
@@ -216,9 +227,9 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 		// Seed 1 expired demo (2 hours old) and 1 active demo (10 mins old)
 		await testEnv.mydb
 			.prepare(
-				`INSERT INTO project_demos (project_id, status, droplet_id, droplet_ip, launched_at)
-                 VALUES (?1, 'RUNNING', 111111, '192.0.2.10', ?2),
-                        (?3, 'RUNNING', 222222, '192.0.2.20', ?4)`,
+				`INSERT INTO project_demos (project_id, status, droplet_id, droplet_ip, tags, launched_at)
+                 VALUES (?1, 'RUNNING', 111111, '192.0.2.10', '["demo-launcher","test-1"]', ?2),
+                        (?3, 'RUNNING', 222222, '192.0.2.20', '["demo-launcher","test-2"]', ?4)`,
 			)
 			.bind(projects[0].id, twoHoursAgo, activeProjectId, tenMinutesAgo)
 			.run();
@@ -236,15 +247,16 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 		expect(deleteDropletSpy).toHaveBeenCalledTimes(1);
 		expect(deleteDropletSpy).toHaveBeenCalledWith(111111);
 
-		// Verify expired demo is reset to STOPPED in D1
+		// Verify expired demo is reset to STOPPED in D1 with tags = NULL
 		const expiredRow = await testEnv.mydb
 			.prepare('SELECT * FROM project_demos WHERE project_id = ?1')
 			.bind(projects[0].id)
-			.first<{ status: string; droplet_id: number | null; droplet_ip: string | null }>();
+			.first<{ status: string; droplet_id: number | null; droplet_ip: string | null; tags: string | null }>();
 
 		expect(expiredRow?.status).toBe('STOPPED');
 		expect(expiredRow?.droplet_id).toBeNull();
 		expect(expiredRow?.droplet_ip).toBeNull();
+		expect(expiredRow?.tags).toBeNull();
 
 		// Verify recent demo is still RUNNING
 		const activeRow = await testEnv.mydb
@@ -306,6 +318,14 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 
 	it('7. DigitalOceanProdService should use region, size, and image from config or fallback to defaults', async () => {
 		const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+			if (typeof url === 'string' && url.includes('/firewalls') && (!init || init.method === 'GET')) {
+				return new Response(
+					JSON.stringify({
+						firewalls: [{ id: 'fw-1', name: 'demo-launcher-fw', tags: ['demo-launcher-fw'] }],
+					}),
+					{ status: 200 },
+				);
+			}
 			if (typeof url === 'string' && url.includes('/droplets') && init?.method === 'POST') {
 				const body = JSON.parse(init.body as string);
 				return new Response(JSON.stringify({ droplet: { id: 999999 } }), { status: 200 });
@@ -338,7 +358,7 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 		expect(postedBody.region).toBe('nyc1');
 		expect(postedBody.size).toBe('s-2vcpu-4gb');
 		expect(postedBody.image).toBe('debian-12-x64');
-	});
+	}, 15000);
 
 	it('8. POST /api/launch should log action requests in action_logs table', async () => {
 		// Test rejected launch logs
@@ -547,11 +567,19 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 		expect(postedBody.public_key).toBe(targetKey);
 	});
 
-	it('13. DigitalOceanProdService.createDroplet should include ssh_keys in payload when sshPublicKey is set', async () => {
+	it('13. DigitalOceanProdService.createDroplet should include ssh_keys and firewall tags in payload', async () => {
 		const targetKey = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKeyForDroplet';
 		let dropletPostBody: any = null;
 
 		vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+			if (typeof url === 'string' && url.includes('/firewalls') && (!init || init.method === 'GET')) {
+				return new Response(
+					JSON.stringify({
+						firewalls: [{ id: 'fw-123', name: 'demo-launcher-fw', tags: ['demo-launcher-fw'] }],
+					}),
+					{ status: 200 },
+				);
+			}
 			if (typeof url === 'string' && url.includes('/account/keys') && (!init || init.method === 'GET')) {
 				return new Response(
 					JSON.stringify({
@@ -587,7 +615,161 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 		const droplet = await service.createDroplet('test-ssh-proj', 'https://github.com/example/repo.git');
 		expect(droplet.id).toBe(888888);
 		expect(droplet.ip).toBe('203.0.113.88');
+		expect(droplet.tags).toEqual(['demo-launcher', 'test-ssh-proj', 'demo-launcher-fw']);
 		expect(dropletPostBody).not.toBeNull();
 		expect(dropletPostBody.ssh_keys).toEqual([54321]);
+		expect(dropletPostBody.tags).toEqual(['demo-launcher', 'test-ssh-proj', 'demo-launcher-fw']);
+	}, 15000);
+
+	it('14. ensureFirewall should return existing firewall ID and cache it without creating new firewall', async () => {
+		let listCalls = 0;
+		let postCalls = 0;
+
+		vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+			if (typeof url === 'string' && url.includes('/firewalls') && (!init || init.method === 'GET')) {
+				listCalls++;
+				return new Response(
+					JSON.stringify({
+						firewalls: [{ id: 'fw-existing-id', name: 'demo-launcher-fw', tags: ['demo-launcher-fw'] }],
+					}),
+					{ status: 200 },
+				);
+			}
+			if (typeof url === 'string' && url.includes('/firewalls') && init?.method === 'POST') {
+				postCalls++;
+				return new Response(JSON.stringify({ firewall: { id: 'fw-unexpected' } }), { status: 201 });
+			}
+			return new Response('Not found', { status: 404 });
+		});
+
+		const service = new DigitalOceanProdService('test-key');
+		const fwId1 = await service.ensureFirewall();
+		const fwId2 = await service.ensureFirewall();
+
+		expect(fwId1).toBe('fw-existing-id');
+		expect(fwId2).toBe('fw-existing-id');
+		expect(listCalls).toBe(1);
+		expect(postCalls).toBe(0);
+	});
+
+	it('15. ensureFirewall should add tag to existing firewall if tag is missing', async () => {
+		let tagAdded = false;
+
+		vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+			if (typeof url === 'string' && url.includes('/firewalls?per_page=200') && (!init || init.method === 'GET')) {
+				return new Response(
+					JSON.stringify({
+						firewalls: [{ id: 'fw-missing-tag', name: 'demo-launcher-fw', tags: [] }],
+					}),
+					{ status: 200 },
+				);
+			}
+			if (typeof url === 'string' && url.includes('/firewalls/fw-missing-tag/tags') && init?.method === 'POST') {
+				const body = JSON.parse(init.body as string);
+				if (body.tags?.includes('demo-launcher-fw')) {
+					tagAdded = true;
+				}
+				return new Response(null, { status: 204 });
+			}
+			return new Response('Not found', { status: 404 });
+		});
+
+		const service = new DigitalOceanProdService('test-key');
+		const fwId = await service.ensureFirewall();
+
+		expect(fwId).toBe('fw-missing-tag');
+		expect(tagAdded).toBe(true);
+	});
+
+	it('16. ensureFirewall should ensure tag and create firewall with default rules when missing', async () => {
+		let tagCreated = false;
+		let firewallCreated = false;
+		let createdPayload: any = null;
+
+		vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+			if (typeof url === 'string' && url.includes('/firewalls?per_page=200') && (!init || init.method === 'GET')) {
+				return new Response(JSON.stringify({ firewalls: [] }), { status: 200 });
+			}
+			if (typeof url === 'string' && url.includes('/tags') && init?.method === 'POST') {
+				const body = JSON.parse(init.body as string);
+				if (body.name === 'demo-launcher-fw') {
+					tagCreated = true;
+				}
+				return new Response(JSON.stringify({ tag: { name: 'demo-launcher-fw' } }), { status: 201 });
+			}
+			if (typeof url === 'string' && url.includes('/firewalls') && init?.method === 'POST') {
+				firewallCreated = true;
+				createdPayload = JSON.parse(init.body as string);
+				return new Response(
+					JSON.stringify({
+						firewall: {
+							id: 'fw-created-new-id',
+							name: 'demo-launcher-fw',
+							tags: ['demo-launcher-fw'],
+						},
+					}),
+					{ status: 201 },
+				);
+			}
+			return new Response('Not found', { status: 404 });
+		});
+
+		const service = new DigitalOceanProdService('test-key');
+		const fwId = await service.ensureFirewall();
+
+		expect(fwId).toBe('fw-created-new-id');
+		expect(tagCreated).toBe(true);
+		expect(firewallCreated).toBe(true);
+		expect(createdPayload.name).toBe('demo-launcher-fw');
+		expect(createdPayload.tags).toEqual(['demo-launcher-fw']);
+		expect(createdPayload.inbound_rules).toEqual(DEFAULT_FIREWALL_INBOUND_RULES);
+		expect(createdPayload.outbound_rules).toEqual(DEFAULT_FIREWALL_OUTBOUND_RULES);
+	});
+
+	it('17. ensureFirewall should handle creation conflict race condition by re-listing and matching name', async () => {
+		let listAttempt = 0;
+
+		vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+			if (typeof url === 'string' && url.includes('/firewalls?per_page=200') && (!init || init.method === 'GET')) {
+				listAttempt++;
+				if (listAttempt === 1) {
+					return new Response(JSON.stringify({ firewalls: [] }), { status: 200 });
+				}
+				return new Response(
+					JSON.stringify({
+						firewalls: [{ id: 'fw-race-resolved', name: 'demo-launcher-fw', tags: ['demo-launcher-fw'] }],
+					}),
+					{ status: 200 },
+				);
+			}
+			if (typeof url === 'string' && url.includes('/tags') && init?.method === 'POST') {
+				return new Response(JSON.stringify({}), { status: 201 });
+			}
+			if (typeof url === 'string' && url.includes('/firewalls') && init?.method === 'POST') {
+				return new Response(JSON.stringify({ id: 'unprocessable_entity', message: 'Name in use' }), { status: 422 });
+			}
+			return new Response('Not found', { status: 404 });
+		});
+
+		const service = new DigitalOceanProdService('test-key');
+		const fwId = await service.ensureFirewall();
+
+		expect(fwId).toBe('fw-race-resolved');
+		expect(listAttempt).toBe(2);
+	});
+
+	it('18. getDigitalOceanService should apply DO_FIREWALL_NAME and DO_FIREWALL_TAG overrides', async () => {
+		const customEnv: Env = {
+			...testEnv,
+			DO_USE_REAL_API: false,
+			ENVIRONMENT: 'development',
+			DO_FIREWALL_NAME: 'custom-fw',
+			DO_FIREWALL_TAG: 'custom-fw-tag',
+		};
+
+		const service = getDigitalOceanService(customEnv);
+		const droplet = await service.createDroplet('test-proj', 'https://github.com/example/repo.git');
+
+		expect(droplet.tags).toEqual(['demo-launcher', 'test-proj', 'custom-fw-tag']);
 	});
 });

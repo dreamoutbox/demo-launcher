@@ -19,6 +19,9 @@ npx wrangler d1 create "$DB_NAME" || true
 echo "Applying schema to remote D1 database..."
 npx wrangler d1 execute "$DB_NAME" --yes --remote --file=./schema.sql
 
+echo "Running migrations if needed on remote D1 database..."
+./dev-migrate.sh --remote
+
 echo "Verifying project_demos table on remote D1..."
 npx wrangler d1 execute "$DB_NAME" --remote --command="SELECT * FROM project_demos"
 

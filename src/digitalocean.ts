@@ -43,12 +43,14 @@ export function getDigitalOceanService(env: Env, requestUrl?: string): IDigitalO
 		size: env.DO_SIZE,
 		image: env.DO_IMAGE,
 		sshPublicKey: env.DROPLET_SSH_PUBLIC_KEY,
+		firewallName: env.DO_FIREWALL_NAME,
+		firewallTag: env.DO_FIREWALL_TAG,
 	};
 	if (isRealApiEnabled(env)) {
 		return new DigitalOceanProdService(env.DO_API_KEY, config);
 	}
 	if (isDevelopment(env, requestUrl)) {
-		return new DigitalOceanMockService(env.DO_API_KEY);
+		return new DigitalOceanMockService(env.DO_API_KEY, env.DO_FIREWALL_TAG);
 	}
 	return new DigitalOceanProdService(env.DO_API_KEY, config);
 }

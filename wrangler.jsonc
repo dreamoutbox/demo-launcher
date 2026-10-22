@@ -21,6 +21,12 @@
 			"persist": true,
 		},
 	},
+	/**
+	 * Bindings
+	 * Bindings allow your Worker to interact with resources on the Cloudflare Developer Platform, including
+	 * databases, object storage, AI inference, real-time communication and more.
+	 * https://developers.cloudflare.com/workers/runtime-apis/bindings/
+	 */
 	"queues": {
 		"producers": [
 			{
@@ -65,30 +71,25 @@
 			"*/5 * * * *"
 		],
 	},
-	"vars": {
-		"DO_REGION": "sgp1",
-		"DO_SIZE": "s-1vcpu-1gb",
-		"DO_IMAGE": "ubuntu-24-04-x64",
-		"ADMIN_KEY": "demo-admin-key"
-	},
-	/**
-	 * Smart Placement
-	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
-	 */
-	// "placement": {  "mode": "smart" }
-	/**
-	 * Bindings
-	 * Bindings allow your Worker to interact with resources on the Cloudflare Developer Platform, including
-	 * databases, object storage, AI inference, real-time communication and more.
-	 * https://developers.cloudflare.com/workers/runtime-apis/bindings/
-	 */
 	/**
 	 * Environment Variables
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
 	 * Note: Use secrets to store sensitive data.
 	 * https://developers.cloudflare.com/workers/configuration/secrets/
 	 */
-	// "vars": {  "MY_VARIABLE": "production_value" }
+	"vars": {
+		"DO_REGION": "sgp1",
+		"DO_SIZE": "s-1vcpu-1gb",
+		"DO_IMAGE": "ubuntu-24-04-x64",
+		"ADMIN_KEY": "demo-admin-key",
+		// "DO_FIREWALL_NAME": "demo-launcher-fw",
+		// "DO_FIREWALL_TAG": "demo-launcher-fw"
+	},
+	/**
+	 * Smart Placement
+	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
+	 */
+	// "placement": {  "mode": "smart" }
 	/**
 	 * Static Assets
 	 * https://developers.cloudflare.com/workers/static-assets/binding/

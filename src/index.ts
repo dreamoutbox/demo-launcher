@@ -41,7 +41,7 @@ export async function cleanupExpiredDemos(
 			await env.mydb
 				.prepare(
 					`UPDATE project_demos
-                     SET status = 'STOPPED', droplet_id = NULL, droplet_ip = NULL, launched_at = NULL
+                     SET status = 'STOPPED', droplet_id = NULL, droplet_ip = NULL, tags = NULL, launched_at = NULL
                      WHERE project_id = ?1
 					`,
 				)
@@ -78,6 +78,7 @@ export default {
 				status: string;
 				droplet_id: number | null;
 				droplet_ip: string | null;
+				tags: string | null;
 				launched_at: number | null;
 			}>();
 

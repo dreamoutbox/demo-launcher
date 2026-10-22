@@ -2,6 +2,7 @@ export interface DropletInfo {
 	id: number;
 	ip: string;
 	status: string;
+	tags: string[];
 }
 
 export interface IDigitalOceanService {
@@ -51,5 +52,7 @@ export interface Env {
 	ADMIN_KEY?: string;
 	DROPLET_SSH_PUBLIC_KEY?: string;
 	DROPLET_SSH_PRIVATE_KEY?: string;
+	DO_FIREWALL_NAME?: string;
+	DO_FIREWALL_TAG?: string;
 	ASSETS?: Fetcher;
 }

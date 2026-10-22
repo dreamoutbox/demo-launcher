@@ -49,7 +49,19 @@ Deploy the Worker and static assets:
 ./dev-deploy.sh
 ```
 
-The production service creates Ubuntu 24.04 droplets in DigitalOcean region `sgp1` using size `s-1vcpu-1gb`. Adjust these values in [`src/digitalocean.prod.ts`](src/digitalocean.prod.ts) if needed. DigitalOcean account limits and billing apply.
+The production service creates Ubuntu 24.04 droplets in DigitalOcean region `sgp1` using size `s-1vcpu-1gb`. Adjust these values in [`src/digitalocean.prod.ts`](src/digitalocean.prod.ts) or via `wrangler.jsonc` vars if needed. DigitalOcean account limits and billing apply.
+
+### Firewall & Tags
+
+Every newly launched droplet is automatically tagged with `['demo-launcher', <projectId>, <firewallTag>]`. Before creating a droplet, the Worker ensures the DigitalOcean tag and cloud firewall exist (default name and tag: `demo-launcher-fw`). DigitalOcean automatically attaches the firewall to any droplet carrying that tag.
+
+- **Inbound rules:** TCP ports 22, 80, 443 and ICMP from `0.0.0.0/0` and `::/0`.
+- **Outbound rules:** All TCP, UDP, and ICMP traffic to any destination.
+- **Environment overrides:** Set `DO_FIREWALL_NAME` and `DO_FIREWALL_TAG` in `wrangler.jsonc` or `.dev.vars` to customize the firewall name and tag.
+
+### Database Migrations
+
+Fresh installations create tables with the complete schema defined in [`schema.sql`](schema.sql). For existing databases, `./dev-migrate.sh [--local|--remote]` checks whether table columns (such as `tags` on `project_demos`) already exist and applies idempotent schema updates from [`migrations-manual/`](migrations-manual/). Both `./dev-setup-local.sh` and `./dev-setup-remote.sh` run `./dev-migrate.sh` automatically.
 
 ## Run Locally
 

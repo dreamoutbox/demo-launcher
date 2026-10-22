@@ -1,13 +1,17 @@
-import { buildStartupScript } from './helper';
+import { buildDropletTags, buildStartupScript, DEFAULT_FIREWALL_TAG } from './helper';
 import { DropletInfo, IDigitalOceanService } from './types';
 
 export class DigitalOceanMockService implements IDigitalOceanService {
-	constructor(private apiKey?: string) {
+	private readonly firewallTag: string;
+
+	constructor(private apiKey?: string, firewallTag?: string) {
+		this.firewallTag = firewallTag || DEFAULT_FIREWALL_TAG;
 		console.log('[DO-MOCK] Initialized DigitalOcean Mock Service');
 	}
 
 	async createDroplet(projectId: string, repoUrl: string): Promise<DropletInfo> {
 		const userData = buildStartupScript(repoUrl);
+		console.log(`[DO-MOCK] Ensuring firewall (mock) with tag: ${this.firewallTag}`);
 		console.log(`[DO-MOCK] Creating droplet for project "${projectId}"...`);
 		console.log(`[DO-MOCK] Startup Script (Nginx + Git Pull + Entrypoint):\n${userData}`);
 
@@ -16,13 +20,15 @@ export class DigitalOceanMockService implements IDigitalOceanService {
 
 		const mockDropletId = Math.floor(10000000 + Math.random() * 90000000);
 		const mockIp = `192.0.2.${Math.floor(1 + Math.random() * 254)}`; // TEST-NET-1 IP range
+		const tags = buildDropletTags(projectId, this.firewallTag);
 
-		console.log(`[DO-MOCK] Droplet Created -> ID: ${mockDropletId}, IP: ${mockIp}`);
+		console.log(`[DO-MOCK] Droplet Created -> ID: ${mockDropletId}, IP: ${mockIp}, Tags: ${JSON.stringify(tags)}`);
 
 		return {
 			id: mockDropletId,
 			ip: mockIp,
 			status: 'active',
+			tags,
 		};
 	}
 

@@ -1,12 +1,75 @@
 import { DropletInfo, IDigitalOceanService } from './types';
-import { buildStartupScript, normalizePublicKey } from "./helper";
+import {
+	buildDropletTags,
+	buildStartupScript,
+	DEFAULT_FIREWALL_NAME,
+	DEFAULT_FIREWALL_TAG,
+	normalizePublicKey,
+} from './helper';
 
 export interface DigitalOceanConfig {
 	region?: string;
 	size?: string;
 	image?: string;
 	sshPublicKey?: string;
+	firewallName?: string;
+	firewallTag?: string;
 }
+
+export const DEFAULT_FIREWALL_INBOUND_RULES = [
+	{
+		protocol: 'tcp',
+		ports: '22',
+		sources: {
+			addresses: ['0.0.0.0/0', '::/0'],
+		},
+	},
+	{
+		protocol: 'tcp',
+		ports: '80',
+		sources: {
+			addresses: ['0.0.0.0/0', '::/0'],
+		},
+	},
+	{
+		protocol: 'tcp',
+		ports: '443',
+		sources: {
+			addresses: ['0.0.0.0/0', '::/0'],
+		},
+	},
+	{
+		protocol: 'icmp',
+		ports: '0',
+		sources: {
+			addresses: ['0.0.0.0/0', '::/0'],
+		},
+	},
+];
+
+export const DEFAULT_FIREWALL_OUTBOUND_RULES = [
+	{
+		protocol: 'tcp',
+		ports: 'all',
+		destinations: {
+			addresses: ['0.0.0.0/0', '::/0'],
+		},
+	},
+	{
+		protocol: 'udp',
+		ports: 'all',
+		destinations: {
+			addresses: ['0.0.0.0/0', '::/0'],
+		},
+	},
+	{
+		protocol: 'icmp',
+		ports: '0',
+		destinations: {
+			addresses: ['0.0.0.0/0', '::/0'],
+		},
+	},
+];
 
 export class DigitalOceanProdService implements IDigitalOceanService {
 	private readonly baseUrl = 'https://api.digitalocean.com/v2';
@@ -14,13 +77,16 @@ export class DigitalOceanProdService implements IDigitalOceanService {
 	private readonly size: string;
 	private readonly image: string;
 	private readonly sshPublicKey?: string;
+	private readonly firewallName: string;
+	private readonly firewallTag: string;
 	private cachedSshKeyId?: number | string;
+	private cachedFirewallId?: string;
 
 	/**
 	 * Initializes the DigitalOcean production API service.
 	 *
 	 * @param apiKey - DigitalOcean personal access token
-	 * @param config - Optional droplet configuration overrides for region, size, image, and sshPublicKey
+	 * @param config - Optional droplet configuration overrides for region, size, image, sshPublicKey, firewallName, and firewallTag
 	 *
 	 * @example
 	 * ```ts
@@ -29,6 +95,8 @@ export class DigitalOceanProdService implements IDigitalOceanService {
 	 *     size: env.DO_SIZE,
 	 *     image: env.DO_IMAGE,
 	 *     sshPublicKey: env.DROPLET_SSH_PUBLIC_KEY,
+	 *     firewallName: env.DO_FIREWALL_NAME,
+	 *     firewallTag: env.DO_FIREWALL_TAG,
 	 * });
 	 * ```
 	 */
@@ -40,6 +108,8 @@ export class DigitalOceanProdService implements IDigitalOceanService {
 		this.size = config?.size || 's-1vcpu-1gb';
 		this.image = config?.image || 'ubuntu-24-04-x64';
 		this.sshPublicKey = config?.sshPublicKey;
+		this.firewallName = config?.firewallName || DEFAULT_FIREWALL_NAME;
+		this.firewallTag = config?.firewallTag || DEFAULT_FIREWALL_TAG;
 	}
 
 	private get headers(): HeadersInit {
@@ -130,8 +200,136 @@ export class DigitalOceanProdService implements IDigitalOceanService {
 		throw new Error(`DigitalOcean ensureSshKey failed (${createRes.status}): ${errText}`);
 	}
 
+	/**
+	 * Ensures that a tag exists in the DigitalOcean account.
+	 * If the tag already exists, treats it as success.
+	 *
+	 * @param name - Tag name to create or ensure
+	 *
+	 * @example
+	 * ```ts
+	 * await service.ensureTag('demo-launcher-fw');
+	 * ```
+	 */
+	async ensureTag(name: string): Promise<void> {
+		const res = await fetch(`${this.baseUrl}/tags`, {
+			method: 'POST',
+			headers: this.headers,
+			body: JSON.stringify({ name }),
+		});
+
+		// 201 Created is success; 422 or 409 indicates the tag already exists
+		if (res.ok || res.status === 422 || res.status === 409) {
+			return;
+		}
+
+		const errText = await res.text();
+		throw new Error(`DigitalOcean ensureTag failed (${res.status}): ${errText}`);
+	}
+
+	/**
+	 * Ensures that the demo firewall exists and includes the configured droplet tag.
+	 * Returns the cached firewall ID if already resolved.
+	 * If the firewall exists, checks whether the firewall tag is assigned and adds it if missing.
+	 * If the firewall does not exist, ensures the tag and creates the firewall.
+	 *
+	 * @returns DigitalOcean Firewall ID string
+	 *
+	 * @example
+	 * ```ts
+	 * const firewallId = await service.ensureFirewall();
+	 * ```
+	 */
+	async ensureFirewall(): Promise<string> {
+		if (this.cachedFirewallId !== undefined) {
+			return this.cachedFirewallId;
+		}
+
+		// 1. Check if the firewall already exists by name
+		const listRes = await fetch(`${this.baseUrl}/firewalls?per_page=200`, {
+			method: 'GET',
+			headers: this.headers,
+		});
+
+		if (listRes.ok) {
+			const data = (await listRes.json()) as {
+				firewalls?: Array<{ id: string; name: string; tags?: string[] }>;
+			};
+			const existing = data.firewalls?.find((fw) => fw.name === this.firewallName);
+			if (existing) {
+				if (!existing.tags?.includes(this.firewallTag)) {
+					const tagRes = await fetch(`${this.baseUrl}/firewalls/${existing.id}/tags`, {
+						method: 'POST',
+						headers: this.headers,
+						body: JSON.stringify({ tags: [this.firewallTag] }),
+					});
+					if (!tagRes.ok && tagRes.status !== 422 && tagRes.status !== 409) {
+						const errText = await tagRes.text();
+						throw new Error(`DigitalOcean add tag to firewall failed (${tagRes.status}): ${errText}`);
+					}
+				}
+				this.cachedFirewallId = existing.id;
+				return existing.id;
+			}
+		}
+
+		// 2. Tag must exist before creating firewall referencing it
+		await this.ensureTag(this.firewallTag);
+
+		// 3. Create the firewall
+		const createRes = await fetch(`${this.baseUrl}/firewalls`, {
+			method: 'POST',
+			headers: this.headers,
+			body: JSON.stringify({
+				name: this.firewallName,
+				inbound_rules: DEFAULT_FIREWALL_INBOUND_RULES,
+				outbound_rules: DEFAULT_FIREWALL_OUTBOUND_RULES,
+				tags: [this.firewallTag],
+			}),
+		});
+
+		if (createRes.ok) {
+			const createData = (await createRes.json()) as {
+				firewall: { id: string };
+			};
+			this.cachedFirewallId = createData.firewall.id;
+			return createData.firewall.id;
+		}
+
+		// 4. Handle creation race condition: re-query and match by name
+		if (createRes.status === 422 || createRes.status === 409) {
+			const retryRes = await fetch(`${this.baseUrl}/firewalls?per_page=200`, {
+				method: 'GET',
+				headers: this.headers,
+			});
+			if (retryRes.ok) {
+				const retryData = (await retryRes.json()) as {
+					firewalls?: Array<{ id: string; name: string; tags?: string[] }>;
+				};
+				const matched = retryData.firewalls?.find((fw) => fw.name === this.firewallName);
+				if (matched) {
+					if (!matched.tags?.includes(this.firewallTag)) {
+						await fetch(`${this.baseUrl}/firewalls/${matched.id}/tags`, {
+							method: 'POST',
+							headers: this.headers,
+							body: JSON.stringify({ tags: [this.firewallTag] }),
+						});
+					}
+					this.cachedFirewallId = matched.id;
+					return matched.id;
+				}
+			}
+		}
+
+		const errText = await createRes.text();
+		throw new Error(`DigitalOcean ensureFirewall failed (${createRes.status}): ${errText}`);
+	}
+
 	async createDroplet(projectId: string, repoUrl: string): Promise<DropletInfo> {
 		const userData = buildStartupScript(repoUrl);
+
+		// Ensure firewall exists and is tagged before provisioning droplet
+		await this.ensureFirewall();
 
 		let sshKeys: Array<number | string> | undefined;
 		if (this.sshPublicKey && this.sshPublicKey.trim() !== '') {
@@ -139,13 +337,15 @@ export class DigitalOceanProdService implements IDigitalOceanService {
 			sshKeys = [keyId];
 		}
 
+		const tags = buildDropletTags(projectId, this.firewallTag);
+
 		const dropletPayload: Record<string, unknown> = {
 			name: `demo-${projectId}-${Date.now()}`,
 			region: this.region,
 			size: this.size,
 			image: this.image,
 			user_data: userData,
-			tags: ['demo-launcher', projectId],
+			tags,
 		};
 
 		if (sshKeys && sshKeys.length > 0) {
@@ -191,6 +391,7 @@ export class DigitalOceanProdService implements IDigitalOceanService {
 						id: dropletId,
 						ip: publicV4.ip_address,
 						status: getData.droplet.status,
+						tags,
 					};
 				}
 			}

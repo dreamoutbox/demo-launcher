@@ -83,10 +83,31 @@ fi
  * ```
  */
 export function normalizePublicKey(key: string): string {
-	const trimmed = key.trim();
-	const parts = trimmed.split(/\s+/);
-	if (parts.length >= 2) {
-		return `${parts[0]} ${parts[1]}`;
-	}
-	return trimmed;
+    const trimmed = key.trim();
+    const parts = trimmed.split(/\s+/);
+    if (parts.length >= 2) {
+        return `${parts[0]} ${parts[1]}`;
+    }
+    return trimmed;
+}
+
+export const DEFAULT_FIREWALL_NAME = 'demo-launcher-fw';
+export const DEFAULT_FIREWALL_TAG = 'demo-launcher-fw';
+
+/**
+ * Builds a deduplicated list of tags to be assigned to a demo droplet.
+ * Always includes 'demo-launcher', the given projectId, and the configured firewall tag.
+ *
+ * @param projectId - Unique identifier for the demo project
+ * @param firewallTag - Optional firewall tag, defaults to DEFAULT_FIREWALL_TAG ('demo-launcher-fw')
+ * @returns Array of unique tag strings
+ *
+ * @example
+ * ```ts
+ * const tags = buildDropletTags('shop-demo', 'custom-fw-tag');
+ * // ['demo-launcher', 'shop-demo', 'custom-fw-tag']
+ * ```
+ */
+export function buildDropletTags(projectId: string, firewallTag: string = DEFAULT_FIREWALL_TAG): string[] {
+    return Array.from(new Set(['demo-launcher', projectId, firewallTag]));
 }

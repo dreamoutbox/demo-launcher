@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS project_demos (
     status TEXT NOT NULL, -- 'STOPPED' | 'LAUNCHING' | 'RUNNING' | 'FAILED'
     droplet_id INTEGER,
     droplet_ip TEXT,
+    tags TEXT,            -- JSON array of DigitalOcean tags
     launched_at INTEGER   -- Unix timestamp in milliseconds
 );
 

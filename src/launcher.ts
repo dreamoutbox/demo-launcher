@@ -52,10 +52,10 @@ export class ProjectLauncher extends DurableObject<Env> {
 			await this.env.mydb
 				.prepare(
 					`UPDATE project_demos
-                     SET status = 'RUNNING', droplet_id = ?1, droplet_ip = ?2, launched_at = ?3
-                     WHERE project_id = ?4`,
+                     SET status = 'RUNNING', droplet_id = ?1, droplet_ip = ?2, tags = ?3, launched_at = ?4
+                     WHERE project_id = ?5`,
 				)
-				.bind(droplet.id, droplet.ip, Date.now(), project.id)
+				.bind(droplet.id, droplet.ip, JSON.stringify(droplet.tags), Date.now(), project.id)
 				.run();
 
 			console.log(`[DO] Project "${project.id}" is RUNNING at IP ${droplet.ip} (Droplet ID: ${droplet.id})`);
