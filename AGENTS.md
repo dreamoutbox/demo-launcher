@@ -62,3 +62,5 @@ If the application uses Durable Objects or Workflows, refer to the relevant best
 - Workflows: https://developers.cloudflare.com/workflows/build/rules-of-workflows/
 
 - don't update `src/types.ts` manually. use `pnpm types` to update
+
+- write helper functions in `src/helper.ts`

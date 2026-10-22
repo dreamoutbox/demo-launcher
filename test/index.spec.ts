@@ -148,6 +148,8 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 
 	it('2. Queue consumer should create a mock droplet and save IP + RUNNING status in D1', async () => {
 		const createDropletSpy = vi.spyOn(DigitalOceanMockService.prototype, 'createDroplet');
+		// Mock droplet IPs are unroutable; report the app as healthy.
+		vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('ok', { status: 200 }));
 
 		// Build a synthetic queue batch
 		const batch = createMessageBatch<QueueMessage>('demo-launch-queue', [
@@ -190,6 +192,8 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 
 	it('3. Mutex & D1 lock should prevent launching duplicate droplets on concurrent messages', async () => {
 		const createDropletSpy = vi.spyOn(DigitalOceanMockService.prototype, 'createDroplet');
+		// Mock droplet IPs are unroutable; report the app as healthy.
+		vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('ok', { status: 200 }));
 
 		// Simulate 2 duplicate launch messages arriving in the same batch
 		const batch = createMessageBatch<QueueMessage>('demo-launch-queue', [

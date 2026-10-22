@@ -3,6 +3,7 @@ import projects from './projects.json';
 import { getDigitalOceanService } from './digitalocean';
 import { Env } from './types';
 import { Mutex } from './mutex';
+import { waitForHealthy } from './healthcheck';
 
 /**
  * One Durable Object instance per project, identified by project ID.
@@ -50,15 +51,24 @@ export class ProjectLauncher extends DurableObject<Env> {
 			await this.env.mydb
 				.prepare(
 					`UPDATE project_demos
-                     SET status = 'RUNNING', droplet_id = ?1, droplet_ip = ?2, tags = ?3, launched_at = ?4
+                     SET droplet_id = ?1, droplet_ip = ?2, tags = ?3, launched_at = ?4
                      WHERE project_id = ?5`,
 				)
 				.bind(droplet.id, droplet.ip, JSON.stringify(droplet.tags), Date.now(), project.id)
 				.run();
 
+			console.log(`[DO] Waiting for "${project.id}" health check at ${droplet.ip}:${project.healthcheckPort}${project.healthcheckPath}...`);
+			const healthy = await waitForHealthy(droplet.ip, project.healthcheckPort, project.healthcheckPath);
+			if (!healthy) {
+				throw new Error(`Health check failed for project "${project.id}" at ${droplet.ip}`);
+			}
+
+			await this.env.mydb.prepare(`UPDATE project_demos SET status = 'RUNNING' WHERE project_id = ?1`).bind(project.id).run();
+
 			console.log(`[DO] Project "${project.id}" is RUNNING at IP ${droplet.ip} (Droplet ID: ${droplet.id})`);
 		} catch (err) {
 			console.error(`[DO] Failed to launch project "${project.id}":`, err);
+
 			await this.env.mydb
 				.prepare(`UPDATE project_demos SET status = 'FAILED' WHERE project_id = ?1`)
 				.bind(project.id)

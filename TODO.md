@@ -20,9 +20,9 @@
 
 - [x] convert `MAX_DEMO_TIME` to ENV `MAX_DEMO_TIME_SECONDS`
 
-- [ ] add ping health check
+- [x] add ping health check
 
-- [ ] env secret support
+- [ ] env secret support. add secret env to demo server.
 
 # CHORE
 
