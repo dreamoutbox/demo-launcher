@@ -10,6 +10,7 @@ export default defineConfig({
 				bindings: {
 					ENVIRONMENT: 'development',
 					DO_API_KEY: 'mock-test-api-key',
+					DO_USE_REAL_API: 'false',
 				},
 			},
 		}),

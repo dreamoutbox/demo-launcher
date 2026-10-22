@@ -1,12 +1,7 @@
 [
   {
-    "id": "awesome-shop-demo",
-    "name": "Awesome E-Commerce Demo",
-    "repoUrl": "https://github.com/yourusername/awesome-shop-demo.git"
-  },
-  {
-    "id": "realtime-chat-app",
-    "name": "Realtime WebSocket Chat",
-    "repoUrl": "https://github.com/yourusername/realtime-chat-app.git"
+    "id": "demo-launcher-simple-project",
+    "name": "demo-launcher-simple-project",
+    "repoUrl": "https://github.com/dreamoutbox/demo-launcher-simple-project"
   }
 ]

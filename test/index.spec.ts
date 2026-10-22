@@ -10,6 +10,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import worker from '../src/index';
 import projects from '../src/projects.json';
 import { DigitalOceanMockService } from '../src/digitalocean.mock';
+import { DigitalOceanProdService } from '../src/digitalocean.prod';
+import { getDigitalOceanService, isRealApiEnabled } from '../src/digitalocean';
 import { Env, QueueMessage } from '../src/types';
 
 // Cast test env to our strict Env interface
@@ -231,5 +233,45 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 
 		expect(activeRow?.status).toBe('RUNNING');
 		expect(activeRow?.droplet_id).toBe(222222);
+	});
+
+	it('5. getDigitalOceanService should connect to real DO API when DO_USE_REAL_API is true or 1', () => {
+		const baseEnv: Env = {
+			...testEnv,
+			DO_API_KEY: 'test-real-api-key',
+			ENVIRONMENT: 'development',
+		};
+
+		// Verifies truthy variants connect to real DO API in development
+		const trueEnv: Env = { ...baseEnv, DO_USE_REAL_API: true };
+		const oneEnv: Env = { ...baseEnv, DO_USE_REAL_API: 1 };
+		const strTrueEnv: Env = { ...baseEnv, DO_USE_REAL_API: 'true' };
+		const strOneEnv: Env = { ...baseEnv, DO_USE_REAL_API: '1' };
+
+		expect(isRealApiEnabled(trueEnv)).toBe(true);
+		expect(isRealApiEnabled(oneEnv)).toBe(true);
+		expect(isRealApiEnabled(strTrueEnv)).toBe(true);
+		expect(isRealApiEnabled(strOneEnv)).toBe(true);
+
+		expect(getDigitalOceanService(trueEnv, 'http://localhost')).toBeInstanceOf(DigitalOceanProdService);
+		expect(getDigitalOceanService(oneEnv, 'http://localhost')).toBeInstanceOf(DigitalOceanProdService);
+		expect(getDigitalOceanService(strTrueEnv, 'http://localhost')).toBeInstanceOf(DigitalOceanProdService);
+		expect(getDigitalOceanService(strOneEnv, 'http://localhost')).toBeInstanceOf(DigitalOceanProdService);
+
+		// Verifies falsy or undefined values fall back to mock service in development
+		const falseEnv: Env = { ...baseEnv, DO_USE_REAL_API: false };
+		const zeroEnv: Env = { ...baseEnv, DO_USE_REAL_API: 0 };
+		const strFalseEnv: Env = { ...baseEnv, DO_USE_REAL_API: 'false' };
+		const defaultEnv: Env = { ...baseEnv, DO_USE_REAL_API: undefined };
+
+		expect(isRealApiEnabled(falseEnv)).toBe(false);
+		expect(isRealApiEnabled(zeroEnv)).toBe(false);
+		expect(isRealApiEnabled(strFalseEnv)).toBe(false);
+		expect(isRealApiEnabled(defaultEnv)).toBe(false);
+
+		expect(getDigitalOceanService(falseEnv, 'http://localhost')).toBeInstanceOf(DigitalOceanMockService);
+		expect(getDigitalOceanService(zeroEnv, 'http://localhost')).toBeInstanceOf(DigitalOceanMockService);
+		expect(getDigitalOceanService(strFalseEnv, 'http://localhost')).toBeInstanceOf(DigitalOceanMockService);
+		expect(getDigitalOceanService(defaultEnv, 'http://localhost')).toBeInstanceOf(DigitalOceanMockService);
 	});
 });

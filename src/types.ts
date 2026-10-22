@@ -18,6 +18,7 @@ export interface Env {
 	DEMO_LAUNCHER_QUEUE: Queue<QueueMessage>;
 	LAUNCHER: DurableObjectNamespace<import('./launcher').ProjectLauncher>;
 	DO_API_KEY: string;
+	DO_USE_REAL_API?: boolean | string | number;
 	ENVIRONMENT?: 'development' | 'production';
 	TURNSTILE_SECRET_KEY?: string;
 	TURNSTILE_SITE_KEY?: string;
