@@ -1,10 +1,11 @@
 import { DropletInfo, IDigitalOceanService } from './types';
-import { buildStartupScript } from "./helper";
+import { buildStartupScript, normalizePublicKey } from "./helper";
 
 export interface DigitalOceanConfig {
 	region?: string;
 	size?: string;
 	image?: string;
+	sshPublicKey?: string;
 }
 
 export class DigitalOceanProdService implements IDigitalOceanService {
@@ -12,12 +13,14 @@ export class DigitalOceanProdService implements IDigitalOceanService {
 	private readonly region: string;
 	private readonly size: string;
 	private readonly image: string;
+	private readonly sshPublicKey?: string;
+	private cachedSshKeyId?: number | string;
 
 	/**
 	 * Initializes the DigitalOcean production API service.
 	 *
 	 * @param apiKey - DigitalOcean personal access token
-	 * @param config - Optional droplet configuration overrides for region, size, and image
+	 * @param config - Optional droplet configuration overrides for region, size, image, and sshPublicKey
 	 *
 	 * @example
 	 * ```ts
@@ -25,6 +28,7 @@ export class DigitalOceanProdService implements IDigitalOceanService {
 	 *     region: env.DO_REGION,
 	 *     size: env.DO_SIZE,
 	 *     image: env.DO_IMAGE,
+	 *     sshPublicKey: env.DROPLET_SSH_PUBLIC_KEY,
 	 * });
 	 * ```
 	 */
@@ -35,6 +39,7 @@ export class DigitalOceanProdService implements IDigitalOceanService {
 		this.region = config?.region || 'sgp1';
 		this.size = config?.size || 's-1vcpu-1gb';
 		this.image = config?.image || 'ubuntu-24-04-x64';
+		this.sshPublicKey = config?.sshPublicKey;
 	}
 
 	private get headers(): HeadersInit {
@@ -44,20 +49,113 @@ export class DigitalOceanProdService implements IDigitalOceanService {
 		};
 	}
 
+	/**
+	 * Ensures that the provided SSH public key exists in the DigitalOcean account.
+	 * If the key already exists, returns its ID. If not, uploads it and returns the newly created ID.
+	 *
+	 * @param publicKey - Raw OpenSSH public key string
+	 * @returns DigitalOcean SSH key ID
+	 *
+	 * @example
+	 * ```ts
+	 * const keyId = await service.ensureSshKey('ssh-ed25519 AAAAC3NzaC1...');
+	 * ```
+	 */
+	async ensureSshKey(publicKey: string): Promise<number | string> {
+		if (this.cachedSshKeyId !== undefined) {
+			return this.cachedSshKeyId;
+		}
+
+		const cleanKey = publicKey.trim();
+		const normalizedTarget = normalizePublicKey(cleanKey);
+
+		// 1. Check if the key already exists in DigitalOcean
+		const listRes = await fetch(`${this.baseUrl}/account/keys?per_page=200`, {
+			method: 'GET',
+			headers: this.headers,
+		});
+
+		if (listRes.ok) {
+			const data = (await listRes.json()) as {
+				ssh_keys?: Array<{ id: number; fingerprint: string; public_key: string }>;
+			};
+			const existing = data.ssh_keys?.find(
+				(k) => normalizePublicKey(k.public_key) === normalizedTarget,
+			);
+			if (existing) {
+				this.cachedSshKeyId = existing.id;
+				return existing.id;
+			}
+		}
+
+		// 2. Add the SSH key if not found
+		const createRes = await fetch(`${this.baseUrl}/account/keys`, {
+			method: 'POST',
+			headers: this.headers,
+			body: JSON.stringify({
+				name: `demo-launcher-key-${Date.now()}`,
+				public_key: cleanKey,
+			}),
+		});
+
+		if (createRes.ok) {
+			const createData = (await createRes.json()) as {
+				ssh_key: { id: number; fingerprint: string };
+			};
+			this.cachedSshKeyId = createData.ssh_key.id;
+			return createData.ssh_key.id;
+		}
+
+		// 3. If upload returns 422 (key in use or already exists), re-query to resolve ID
+		if (createRes.status === 422) {
+			const retryRes = await fetch(`${this.baseUrl}/account/keys?per_page=200`, {
+				method: 'GET',
+				headers: this.headers,
+			});
+			if (retryRes.ok) {
+				const retryData = (await retryRes.json()) as {
+					ssh_keys?: Array<{ id: number; fingerprint: string; public_key: string }>;
+				};
+				const matchedKey = retryData.ssh_keys?.find(
+					(k) => normalizePublicKey(k.public_key) === normalizedTarget,
+				);
+				if (matchedKey) {
+					this.cachedSshKeyId = matchedKey.id;
+					return matchedKey.id;
+				}
+			}
+		}
+
+		const errText = await createRes.text();
+		throw new Error(`DigitalOcean ensureSshKey failed (${createRes.status}): ${errText}`);
+	}
+
 	async createDroplet(projectId: string, repoUrl: string): Promise<DropletInfo> {
 		const userData = buildStartupScript(repoUrl);
+
+		let sshKeys: Array<number | string> | undefined;
+		if (this.sshPublicKey && this.sshPublicKey.trim() !== '') {
+			const keyId = await this.ensureSshKey(this.sshPublicKey);
+			sshKeys = [keyId];
+		}
+
+		const dropletPayload: Record<string, unknown> = {
+			name: `demo-${projectId}-${Date.now()}`,
+			region: this.region,
+			size: this.size,
+			image: this.image,
+			user_data: userData,
+			tags: ['demo-launcher', projectId],
+		};
+
+		if (sshKeys && sshKeys.length > 0) {
+			dropletPayload.ssh_keys = sshKeys;
+		}
 
 		const createRes = await fetch(`${this.baseUrl}/droplets`, {
 			method: 'POST',
 			headers: this.headers,
-			body: JSON.stringify({
-				name: `demo-${projectId}-${Date.now()}`,
-				region: this.region,
-				size: this.size,
-				image: this.image,
-				user_data: userData,
-				tags: ['demo-launcher', projectId],
-			}),
+			body: JSON.stringify(dropletPayload),
 		});
 
 		if (!createRes.ok) {

@@ -42,6 +42,7 @@ export function getDigitalOceanService(env: Env, requestUrl?: string): IDigitalO
 		region: env.DO_REGION,
 		size: env.DO_SIZE,
 		image: env.DO_IMAGE,
+		sshPublicKey: env.DROPLET_SSH_PUBLIC_KEY,
 	};
 	if (isRealApiEnabled(env)) {
 		return new DigitalOceanProdService(env.DO_API_KEY, config);

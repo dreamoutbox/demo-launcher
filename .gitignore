@@ -166,3 +166,6 @@ dist
 !.env.example
 .wrangler/
 .wrangler-dev.log
+
+# SSH Keys
+ssh-keys/

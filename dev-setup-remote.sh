@@ -36,6 +36,11 @@ echo ""
 echo "2. DigitalOcean API Key:"
 echo "   - Open DigitalOcean Control Panel -> API -> Tokens/Keys."
 echo "   - Generate a Personal Access Token with Read & Write access."
+echo ""
+echo "3. Admin & SSH Keys:"
+echo "   - ADMIN_KEY secures /api/admin/* endpoints."
+echo "   - DROPLET_SSH_PUBLIC_KEY & DROPLET_SSH_PRIVATE_KEY for droplet SSH access."
+echo "   - Run ./dev-create-ssh-key.sh beforehand to generate local keys in ./ssh-keys/."
 echo "========================================================"
 echo ""
 
@@ -43,17 +48,27 @@ set_secret() {
     local key_name="$1"
     local prompt_msg="$2"
     local is_secret="${3:-false}"
+    local default_file_or_val="${4:-}"
     local user_val=""
 
     echo "--------------------------------------------------------"
     echo "Configuration: ${key_name}"
     echo "${prompt_msg}"
 
+    local prompt_label="Enter ${key_name}"
+    if [ -n "${default_file_or_val}" ]; then
+        prompt_label="${prompt_label} [default: ${default_file_or_val}]"
+    fi
+
     if [ "${is_secret}" = "true" ]; then
-        read -rsp "Enter ${key_name} (leave empty to skip): " user_val
+        read -rsp "${prompt_label} (leave empty to skip): " user_val
         echo ""
     else
-        read -rp "Enter ${key_name} (leave empty to skip): " user_val
+        read -rp "${prompt_label} (leave empty to skip): " user_val
+    fi
+
+    if [ -z "${user_val}" ] && [ -n "${default_file_or_val}" ]; then
+        user_val="${default_file_or_val}"
     fi
 
     if [ -z "${user_val}" ]; then
@@ -61,13 +76,30 @@ set_secret() {
         return 0
     fi
 
+    if [ -f "${user_val}" ]; then
+        echo "Reading ${key_name} from file: ${user_val}"
+        user_val="$(cat "${user_val}")"
+    fi
+
     printf "%s" "${user_val}" | npx wrangler secret put "${key_name}"
     echo "Successfully updated secret: ${key_name}"
 }
 
+DEFAULT_PUB_KEY=""
+DEFAULT_PRIV_KEY=""
+if [ -f "./ssh-keys/id_ed25519.pub" ]; then
+    DEFAULT_PUB_KEY="./ssh-keys/id_ed25519.pub"
+fi
+if [ -f "./ssh-keys/id_ed25519" ]; then
+    DEFAULT_PRIV_KEY="./ssh-keys/id_ed25519"
+fi
+
 set_secret "TURNSTILE_SITE_KEY" "Turnstile Site Key (public key used by frontend widget)" "false"
 set_secret "TURNSTILE_SECRET_KEY" "Turnstile Secret Key (private key used for server-side siteverify)" "true"
 set_secret "DO_API_KEY" "DigitalOcean API Token (for creating/destroying demo droplets)" "true"
+set_secret "ADMIN_KEY" "Admin Key (used to authorize /api/admin/* endpoints)" "true" "demo-admin-key"
+set_secret "DROPLET_SSH_PUBLIC_KEY" "DigitalOcean Droplet SSH Public Key (enter key or file path)" "false" "${DEFAULT_PUB_KEY}"
+set_secret "DROPLET_SSH_PRIVATE_KEY" "DigitalOcean Droplet SSH Private Key (enter key or file path)" "true" "${DEFAULT_PRIV_KEY}"
 
 echo ""
 echo "========================================================"

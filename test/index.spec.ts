@@ -12,7 +12,7 @@ import projects from '../src/projects.json';
 import { DigitalOceanMockService } from '../src/digitalocean.mock';
 import { DigitalOceanProdService } from '../src/digitalocean.prod';
 import { getDigitalOceanService, isRealApiEnabled } from '../src/digitalocean';
-import { buildStartupScript } from '../src/helper';
+import { buildStartupScript, normalizePublicKey } from '../src/helper';
 import { ActionLogRecord, ActionStatus, ActionType, Env, QueueMessage } from '../src/types';
 
 // Cast test env to our strict Env interface
@@ -456,5 +456,138 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 		const queryRes = await worker.fetch(queryReq as any, testEnv, ctx5);
 		await waitOnExecutionContext(ctx5);
 		expect(queryRes.status).toBe(200);
+	});
+
+	it('10. normalizePublicKey should extract key type and base64 material, omitting comment and whitespace', () => {
+		const rawWithComment = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleUser123 demo-launcher@cloud';
+		expect(normalizePublicKey(rawWithComment)).toBe('ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleUser123');
+
+		const rawWithoutComment = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleUser123';
+		expect(normalizePublicKey(rawWithoutComment)).toBe('ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleUser123');
+
+		const withExtraWhitespace = '   ssh-ed25519   AAAAC3NzaC1lZDI1NTE5AAAAIExampleUser123   comment  ';
+		expect(normalizePublicKey(withExtraWhitespace)).toBe('ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleUser123');
+	});
+
+	it('11. ensureSshKey should return existing SSH key ID without creating new key when already present in DO', async () => {
+		const targetKey = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExistingKey123 demo-launcher';
+		let getCount = 0;
+		let postCount = 0;
+
+		vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+			if (typeof url === 'string' && url.includes('/account/keys') && (!init || init.method === 'GET')) {
+				getCount++;
+				return new Response(
+					JSON.stringify({
+						ssh_keys: [
+							{
+								id: 112233,
+								fingerprint: '3b:16:bf:e4:8b:00:8b:b8:59:8c:a9:d3:f0:19:be:02',
+								public_key: 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExistingKey123 different-comment',
+								name: 'existing-key',
+							},
+						],
+					}),
+					{ status: 200 },
+				);
+			}
+			if (typeof url === 'string' && url.includes('/account/keys') && init?.method === 'POST') {
+				postCount++;
+				return new Response(JSON.stringify({ ssh_key: { id: 999999 } }), { status: 201 });
+			}
+			return new Response('Not found', { status: 404 });
+		});
+
+		const service = new DigitalOceanProdService('test-key', { sshPublicKey: targetKey });
+		const keyId = await service.ensureSshKey(targetKey);
+
+		expect(keyId).toBe(112233);
+		expect(getCount).toBe(1);
+		expect(postCount).toBe(0);
+
+		// Second call should return cached key without fetching again
+		const cachedKeyId = await service.ensureSshKey(targetKey);
+		expect(cachedKeyId).toBe(112233);
+		expect(getCount).toBe(1);
+	});
+
+	it('12. ensureSshKey should POST new key to DO account when not found in existing list', async () => {
+		const targetKey = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINewKey456 demo-launcher';
+		let getCount = 0;
+		let postedBody: any = null;
+
+		vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+			if (typeof url === 'string' && url.includes('/account/keys') && (!init || init.method === 'GET')) {
+				getCount++;
+				return new Response(JSON.stringify({ ssh_keys: [] }), { status: 200 });
+			}
+			if (typeof url === 'string' && url.includes('/account/keys') && init?.method === 'POST') {
+				postedBody = JSON.parse(init.body as string);
+				return new Response(
+					JSON.stringify({
+						ssh_key: {
+							id: 778899,
+							fingerprint: 'aa:bb:cc:dd',
+							public_key: targetKey,
+							name: postedBody.name,
+						},
+					}),
+					{ status: 201 },
+				);
+			}
+			return new Response('Not found', { status: 404 });
+		});
+
+		const service = new DigitalOceanProdService('test-key', { sshPublicKey: targetKey });
+		const keyId = await service.ensureSshKey(targetKey);
+
+		expect(keyId).toBe(778899);
+		expect(getCount).toBe(1);
+		expect(postedBody).not.toBeNull();
+		expect(postedBody.public_key).toBe(targetKey);
+	});
+
+	it('13. DigitalOceanProdService.createDroplet should include ssh_keys in payload when sshPublicKey is set', async () => {
+		const targetKey = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKeyForDroplet';
+		let dropletPostBody: any = null;
+
+		vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+			if (typeof url === 'string' && url.includes('/account/keys') && (!init || init.method === 'GET')) {
+				return new Response(
+					JSON.stringify({
+						ssh_keys: [{ id: 54321, public_key: targetKey }],
+					}),
+					{ status: 200 },
+				);
+			}
+			if (typeof url === 'string' && url.includes('/droplets') && init?.method === 'POST') {
+				dropletPostBody = JSON.parse(init.body as string);
+				return new Response(JSON.stringify({ droplet: { id: 888888 } }), { status: 200 });
+			}
+			// Polling GET
+			return new Response(
+				JSON.stringify({
+					droplet: {
+						id: 888888,
+						status: 'active',
+						networks: { v4: [{ ip_address: '203.0.113.88', type: 'public' }] },
+					},
+				}),
+				{ status: 200 },
+			);
+		});
+
+		const service = new DigitalOceanProdService('test-key', {
+			region: 'sgp1',
+			size: 's-1vcpu-1gb',
+			image: 'ubuntu-24-04-x64',
+			sshPublicKey: targetKey,
+		});
+
+		const droplet = await service.createDroplet('test-ssh-proj', 'https://github.com/example/repo.git');
+		expect(droplet.id).toBe(888888);
+		expect(droplet.ip).toBe('203.0.113.88');
+		expect(dropletPostBody).not.toBeNull();
+		expect(dropletPostBody.ssh_keys).toEqual([54321]);
 	});
 });

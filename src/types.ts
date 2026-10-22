@@ -49,5 +49,7 @@ export interface Env {
 	TURNSTILE_SECRET_KEY?: string;
 	TURNSTILE_SITE_KEY?: string;
 	ADMIN_KEY?: string;
+	DROPLET_SSH_PUBLIC_KEY?: string;
+	DROPLET_SSH_PRIVATE_KEY?: string;
 	ASSETS?: Fetcher;
 }

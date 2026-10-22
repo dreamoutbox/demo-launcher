@@ -68,3 +68,25 @@ fi
 } 2>&1 | tee ./demo-launcher/startup.log
 `;
 }
+
+/**
+ * Normalizes an OpenSSH public key by extracting only the key type and base64 material,
+ * omitting any extraneous trailing comments and whitespace.
+ *
+ * @param key - The raw OpenSSH public key string (e.g. "ssh-ed25519 AAAAC3... user@host")
+ * @returns Normalized "<type> <base64>" key string
+ *
+ * @example
+ * ```ts
+ * const normalized = normalizePublicKey('ssh-ed25519 AAAAC3NzaC1... user@host');
+ * // returns 'ssh-ed25519 AAAAC3NzaC1...'
+ * ```
+ */
+export function normalizePublicKey(key: string): string {
+	const trimmed = key.trim();
+	const parts = trimmed.split(/\s+/);
+	if (parts.length >= 2) {
+		return `${parts[0]} ${parts[1]}`;
+	}
+	return trimmed;
+}
