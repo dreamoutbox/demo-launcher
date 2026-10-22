@@ -1,4 +1,5 @@
-import { DropletInfo, IDigitalOceanService, buildStartupScript } from './types';
+import { buildStartupScript } from './helper';
+import { DropletInfo, IDigitalOceanService } from './types';
 
 export class DigitalOceanMockService implements IDigitalOceanService {
 	constructor(private apiKey?: string) {

@@ -38,11 +38,16 @@ export function isRealApiEnabled(env: Env): boolean {
  * ```
  */
 export function getDigitalOceanService(env: Env, requestUrl?: string): IDigitalOceanService {
+	const config = {
+		region: env.DO_REGION,
+		size: env.DO_SIZE,
+		image: env.DO_IMAGE,
+	};
 	if (isRealApiEnabled(env)) {
-		return new DigitalOceanProdService(env.DO_API_KEY);
+		return new DigitalOceanProdService(env.DO_API_KEY, config);
 	}
 	if (isDevelopment(env, requestUrl)) {
 		return new DigitalOceanMockService(env.DO_API_KEY);
 	}
-	return new DigitalOceanProdService(env.DO_API_KEY);
+	return new DigitalOceanProdService(env.DO_API_KEY, config);
 }

@@ -65,9 +65,11 @@
 			"*/5 * * * *"
 		],
 	},
-	// "vars": {
-	// 	"ENVIRONMENT": "dev",
-	// },
+	"vars": {
+		"DO_REGION": "sgp1",
+		"DO_SIZE": "s-1vcpu-1gb",
+		"DO_IMAGE": "ubuntu-24-04-x64"
+	},
 	/**
 	 * Smart Placement
 	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement

@@ -7,7 +7,8 @@
 		"deploy": "wrangler deploy",
 		"dev": "wrangler dev",
 		"start": "wrangler dev",
-		"cf-typegen": "wrangler types"
+		"cf-typegen": "wrangler types",
+		"types": "wrangler types"
 	},
 	"devDependencies": {
 		"@cloudflare/vitest-plugin": "^1.0.0",

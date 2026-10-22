@@ -12,6 +12,7 @@ import projects from '../src/projects.json';
 import { DigitalOceanMockService } from '../src/digitalocean.mock';
 import { DigitalOceanProdService } from '../src/digitalocean.prod';
 import { getDigitalOceanService, isRealApiEnabled } from '../src/digitalocean';
+import { buildStartupScript } from '../src/helper';
 import { Env, QueueMessage } from '../src/types';
 
 // Cast test env to our strict Env interface
@@ -192,6 +193,8 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 		const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
 		const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
 
+		const activeProjectId = projects[1]?.id ?? 'test-active-project';
+
 		// Seed 1 expired demo (2 hours old) and 1 active demo (10 mins old)
 		await testEnv.mydb
 			.prepare(
@@ -199,7 +202,7 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
                  VALUES (?1, 'RUNNING', 111111, '192.0.2.10', ?2),
                         (?3, 'RUNNING', 222222, '192.0.2.20', ?4)`,
 			)
-			.bind(projects[0].id, twoHoursAgo, projects[1].id, tenMinutesAgo)
+			.bind(projects[0].id, twoHoursAgo, activeProjectId, tenMinutesAgo)
 			.run();
 
 		// Trigger the scheduled CRON handler
@@ -228,7 +231,7 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 		// Verify recent demo is still RUNNING
 		const activeRow = await testEnv.mydb
 			.prepare('SELECT * FROM project_demos WHERE project_id = ?1')
-			.bind(projects[1].id)
+			.bind(activeProjectId)
 			.first<{ status: string; droplet_id: number | null }>();
 
 		expect(activeRow?.status).toBe('RUNNING');
@@ -273,5 +276,49 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 		expect(getDigitalOceanService(zeroEnv, 'http://localhost')).toBeInstanceOf(DigitalOceanMockService);
 		expect(getDigitalOceanService(strFalseEnv, 'http://localhost')).toBeInstanceOf(DigitalOceanMockService);
 		expect(getDigitalOceanService(defaultEnv, 'http://localhost')).toBeInstanceOf(DigitalOceanMockService);
+	});
+
+	it('6. buildStartupScript should ensure ./demo-launcher dir exists and pipe command output to ./demo-launcher/startup.log', () => {
+		const script = buildStartupScript('https://github.com/example/repo.git');
+
+		expect(script).toContain('mkdir -p ./demo-launcher');
+		expect(script).toContain('} 2>&1 | tee ./demo-launcher/startup.log');
+		expect(script).toContain('git clone "https://github.com/example/repo.git" /opt/demo-app');
+	});
+
+	it('7. DigitalOceanProdService should use region, size, and image from config or fallback to defaults', async () => {
+		const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+			if (typeof url === 'string' && url.includes('/droplets') && init?.method === 'POST') {
+				const body = JSON.parse(init.body as string);
+				return new Response(JSON.stringify({ droplet: { id: 999999 } }), { status: 200 });
+			}
+			// Droplet polling response
+			return new Response(
+				JSON.stringify({
+					droplet: {
+						id: 999999,
+						status: 'active',
+						networks: { v4: [{ ip_address: '203.0.113.1', type: 'public' }] },
+					},
+				}),
+				{ status: 200 },
+			);
+		});
+
+		// Custom config from env
+		const customService = new DigitalOceanProdService('test-key', {
+			region: 'nyc1',
+			size: 's-2vcpu-4gb',
+			image: 'debian-12-x64',
+		});
+		await customService.createDroplet('test-proj', 'https://github.com/example/repo.git');
+
+		const postCall = fetchSpy.mock.calls.find(
+			(call) => typeof call[0] === 'string' && call[0].includes('/droplets') && call[1]?.method === 'POST',
+		);
+		const postedBody = JSON.parse(postCall![1]!.body as string);
+		expect(postedBody.region).toBe('nyc1');
+		expect(postedBody.size).toBe('s-2vcpu-4gb');
+		expect(postedBody.image).toBe('debian-12-x64');
 	});
 });

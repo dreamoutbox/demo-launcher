@@ -1,27 +1,11 @@
 import projects from './projects.json';
 import { getDigitalOceanService } from './digitalocean';
-import { isDevelopment } from './helper';
+import { formatUptime, isDevelopment } from './helper';
 import { Env, QueueMessage } from './types';
 import { verifyTurnstileToken, TurnstileStatus } from './turnstile';
 export { ProjectLauncher } from './launcher';
 
 const MAX_DEMO_TIME = 60 * 60 * 1000; // 1 hour in milliseconds
-
-/**
- * Formats milliseconds into human-readable uptime (e.g., "1h 12m 5s" or "4s")
- */
-function formatUptime(ms: number): string {
-	const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-	const hours = Math.floor(totalSeconds / 3600);
-	const minutes = Math.floor((totalSeconds % 3600) / 60);
-	const seconds = totalSeconds % 60;
-
-	const parts: string[] = [];
-	if (hours > 0) parts.push(`${hours}h`);
-	if (minutes > 0 || hours > 0) parts.push(`${minutes}m`);
-	parts.push(`${seconds}s`);
-	return parts.join(' ');
-}
 
 /**
  * Reusable cleanup function for both Scheduled CRON and manual testing
@@ -39,7 +23,8 @@ export async function cleanupExpiredDemos(
 		.prepare(
 			`SELECT project_id, droplet_id
              FROM project_demos
-             WHERE status = 'RUNNING' AND launched_at <= ?1`,
+             WHERE status = 'RUNNING' AND launched_at <= ?1
+			`,
 		)
 		.bind(expirationThreshold)
 		.all<{ project_id: string; droplet_id: number | null }>();
@@ -56,7 +41,8 @@ export async function cleanupExpiredDemos(
 				.prepare(
 					`UPDATE project_demos
                      SET status = 'STOPPED', droplet_id = NULL, droplet_ip = NULL, launched_at = NULL
-                     WHERE project_id = ?1`,
+                     WHERE project_id = ?1
+					`,
 				)
 				.bind(row.project_id)
 				.run();
@@ -77,7 +63,9 @@ export default {
 		const { pathname, searchParams } = url;
 
 		if (pathname === '/api/beverages') {
-			const { results } = await env.mydb.prepare('SELECT * FROM Customers WHERE CompanyName = ?').bind('Bs Beverages').run();
+			const { results } = await env.mydb.prepare('SELECT * FROM Customers WHERE CompanyName = ?')
+				.bind('Bs Beverages')
+				.run();
 			return Response.json(results);
 		}
 

@@ -1,12 +1,40 @@
-import { DropletInfo, IDigitalOceanService, buildStartupScript } from './types';
+import { DropletInfo, IDigitalOceanService } from './types';
+import { buildStartupScript } from "./helper";
+
+export interface DigitalOceanConfig {
+	region?: string;
+	size?: string;
+	image?: string;
+}
 
 export class DigitalOceanProdService implements IDigitalOceanService {
 	private readonly baseUrl = 'https://api.digitalocean.com/v2';
+	private readonly region: string;
+	private readonly size: string;
+	private readonly image: string;
 
-	constructor(private readonly apiKey: string) {
+	/**
+	 * Initializes the DigitalOcean production API service.
+	 *
+	 * @param apiKey - DigitalOcean personal access token
+	 * @param config - Optional droplet configuration overrides for region, size, and image
+	 *
+	 * @example
+	 * ```ts
+	 * const service = new DigitalOceanProdService(env.DO_API_KEY, {
+	 *     region: env.DO_REGION,
+	 *     size: env.DO_SIZE,
+	 *     image: env.DO_IMAGE,
+	 * });
+	 * ```
+	 */
+	constructor(private readonly apiKey: string, config?: DigitalOceanConfig) {
 		if (!apiKey) {
 			throw new Error('DigitalOcean API key is required in production mode.');
 		}
+		this.region = config?.region || 'sgp1';
+		this.size = config?.size || 's-1vcpu-1gb';
+		this.image = config?.image || 'ubuntu-24-04-x64';
 	}
 
 	private get headers(): HeadersInit {
@@ -24,9 +52,9 @@ export class DigitalOceanProdService implements IDigitalOceanService {
 			headers: this.headers,
 			body: JSON.stringify({
 				name: `demo-${projectId}-${Date.now()}`,
-				region: 'sgp1', // Adjust to your preferred DO region
-				size: 's-1vcpu-1gb',
-				image: 'ubuntu-24-04-x64',
+				region: this.region,
+				size: this.size,
+				image: this.image,
 				user_data: userData,
 				tags: ['demo-launcher', projectId],
 			}),
