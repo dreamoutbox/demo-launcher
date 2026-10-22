@@ -772,4 +772,71 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 
 		expect(droplet.tags).toEqual(['demo-launcher', 'test-proj', 'custom-fw-tag']);
 	});
+
+	it('19. POST /api/launch should reject request with 403 and log action when current time is outside LAUNCH_ALLOW_TIME_RANGE schedule', async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-10-22T04:00:00Z')); // 04:00 UTC is outside 07:00-20:00 and 21:00-23:00
+
+		const scheduledEnv: Env = {
+			...testEnv,
+			LAUNCH_ALLOW_TIME_RANGE: '07:00:00-20:00:00,21:00:00-23:00:00',
+		};
+
+		const req = new Request('http://localhost/api/launch', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ projectId: testProject.id, turnstileToken: 'dev-token' }),
+		});
+
+		const ctx = createExecutionContext();
+		const res = await worker.fetch(req as any, scheduledEnv, ctx);
+		await waitOnExecutionContext(ctx);
+
+		expect(res.status).toBe(403);
+		const data = (await res.json()) as { error: string; allowedRanges: string };
+		expect(data.error).toBe('Launch requests are outside the allowed time schedule');
+		expect(data.allowedRanges).toBe('07:00:00-20:00:00,21:00:00-23:00:00');
+
+		// Verify audit log entry
+		const logged = await testEnv.mydb
+			.prepare('SELECT * FROM action_logs WHERE project_id = ?1 ORDER BY created_at DESC LIMIT 1')
+			.bind(testProject.id)
+			.first<ActionLogRecord>();
+
+		expect(logged).not.toBeNull();
+		expect(logged?.status).toBe(ActionStatus.REJECTED);
+		expect(logged?.action).toBe(ActionType.LAUNCH_DEMO);
+		expect(logged?.details).toContain('outside the allowed time schedule');
+
+		vi.useRealTimers();
+	});
+
+	it('20. POST /api/launch should permit request when current time is within LAUNCH_ALLOW_TIME_RANGE schedule', async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-10-22T12:00:00Z')); // 12:00 UTC is within 07:00-20:00
+
+		const sendSpy = vi.spyOn(testEnv.DEMO_LAUNCHER_QUEUE, 'send');
+
+		const scheduledEnv: Env = {
+			...testEnv,
+			LAUNCH_ALLOW_TIME_RANGE: '07:00:00-20:00:00,21:00:00-23:00:00',
+		};
+
+		const req = new Request('http://localhost/api/launch', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ projectId: testProject.id, turnstileToken: 'dev-token' }),
+		});
+
+		const ctx = createExecutionContext();
+		const res = await worker.fetch(req as any, scheduledEnv, ctx);
+		await waitOnExecutionContext(ctx);
+
+		expect(res.status).toBe(202);
+		const data = (await res.json()) as { projectId: string; message: string };
+		expect(data.projectId).toBe(testProject.id);
+		expect(sendSpy).toHaveBeenCalledWith({ projectId: testProject.id });
+
+		vi.useRealTimers();
+	});
 });

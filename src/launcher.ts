@@ -4,8 +4,6 @@ import { getDigitalOceanService } from './digitalocean';
 import { Env } from './types';
 import { Mutex } from './mutex';
 
-
-
 /**
  * One Durable Object instance per project, identified by project ID.
  * Coordinates project launches and serializes concurrent requests using an instance mutex.
@@ -65,6 +63,7 @@ export class ProjectLauncher extends DurableObject<Env> {
 				.prepare(`UPDATE project_demos SET status = 'FAILED' WHERE project_id = ?1`)
 				.bind(project.id)
 				.run();
+
 			throw err;
 		} finally {
 			unlock();

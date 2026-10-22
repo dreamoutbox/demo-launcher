@@ -84,6 +84,7 @@
 		"ADMIN_KEY": "demo-admin-key",
 		// "DO_FIREWALL_NAME": "demo-launcher-fw",
 		// "DO_FIREWALL_TAG": "demo-launcher-fw"
+		// "LAUNCH_ALLOW_TIME_RANGE": "07:00:00-20:00:00,21:00:00-23:00:00"
 	},
 	/**
 	 * Smart Placement

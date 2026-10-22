@@ -14,6 +14,16 @@
 
 - [x] attach droplets to firewall. by add tag to droplet.
 
+- [x] allow time range schedule, env `LAUNCH_ALLOW_TIME_RANGE=07:00:00-20:00:00,21:00:00-23:00:00`
+
+- [ ] custom machine types in projects.json
+
+- [ ] convert `MAX_DEMO_TIME` to ENV var
+
+- [ ] add ping health check
+
+- [ ] env secret support
+
 # CHORE
 
 - [ ] make admin page use basic main.css

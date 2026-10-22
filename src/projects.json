@@ -2,6 +2,8 @@
   {
     "id": "demo-launcher-simple-project",
     "name": "demo-launcher-simple-project",
-    "repoUrl": "https://github.com/dreamoutbox/demo-launcher-simple-project"
+    "repoUrl": "https://github.com/dreamoutbox/demo-launcher-simple-project",
+    "healthcheckPort": "80",
+    "healthcheckPath": "/healthz"
   }
 ]

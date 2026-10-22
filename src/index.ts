@@ -4,6 +4,7 @@ import { formatUptime, isDevelopment } from './helper';
 import { ActionStatus, ActionType, Env, QueueMessage } from './types';
 import { verifyTurnstileToken, TurnstileStatus } from './turnstile';
 import { extractClientInfo, getActionLogs, isAdminAuthorized, recordActionLog } from './action-log';
+import { evaluateLaunchSchedule } from './time-range';
 export { ProjectLauncher } from './launcher';
 
 const MAX_DEMO_TIME = 60 * 60 * 1000; // 1 hour in milliseconds
@@ -109,6 +110,33 @@ export default {
 				turnstileToken?: string;
 				'cf-turnstile-response'?: string;
 			} | null;
+
+			// Check if launch is permitted within the configured time range schedule
+			const scheduleEval = evaluateLaunchSchedule(env.LAUNCH_ALLOW_TIME_RANGE, new Date(), env.LAUNCH_TIMEZONE);
+			if (!scheduleEval.allowed) {
+				const errorMsg = 'Launch requests are outside the allowed time schedule';
+
+				await recordActionLog(env, {
+					action: ActionType.LAUNCH_DEMO,
+					projectId: body?.projectId ?? null,
+					ipAddress: clientInfo.ipAddress,
+					country: clientInfo.country,
+					userAgent: clientInfo.userAgent,
+					status: ActionStatus.REJECTED,
+					details: JSON.stringify({
+						error: errorMsg,
+						allowedRanges: env.LAUNCH_ALLOW_TIME_RANGE,
+					}),
+				});
+
+				return Response.json(
+					{
+						error: errorMsg,
+						allowedRanges: env.LAUNCH_ALLOW_TIME_RANGE,
+					},
+					{ status: 403 },
+				);
+			}
 
 			const token = body?.turnstileToken || body?.['cf-turnstile-response'];
 			const clientIp = clientInfo.ipAddress ?? undefined;
