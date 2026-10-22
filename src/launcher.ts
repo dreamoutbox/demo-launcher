@@ -1,6 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
 import projects from './projects.json';
-import { getDigitalOceanService } from './digitalocean';
+import { getDigitalOceanService, isDevelopment, isRealApiEnabled } from './digitalocean';
 import { Env } from './types';
 import { Mutex } from './mutex';
 import { waitForHealthy } from './healthcheck';
@@ -57,10 +57,15 @@ export class ProjectLauncher extends DurableObject<Env> {
 				.bind(droplet.id, droplet.ip, JSON.stringify(droplet.tags), Date.now(), project.id)
 				.run();
 
-			console.log(`[DO] Waiting for "${project.id}" health check at ${droplet.ip}:${project.healthcheckPort}${project.healthcheckPath}...`);
-			const healthy = await waitForHealthy(droplet.ip, project.healthcheckPort, project.healthcheckPath);
-			if (!healthy) {
-				throw new Error(`Health check failed for project "${project.id}" at ${droplet.ip}`);
+			// Mock droplets have fake IPs that never respond; skip the health check.
+			if (!isRealApiEnabled(this.env) && isDevelopment(this.env)) {
+				console.log(`[DO] Mock mode: skipping health check for "${project.id}".`);
+			} else {
+				console.log(`[DO] Waiting for "${project.id}" health check at ${droplet.ip}:${project.healthcheckPort}${project.healthcheckPath}...`);
+				const healthy = await waitForHealthy(droplet.ip, project.healthcheckPort, project.healthcheckPath);
+				if (!healthy) {
+					throw new Error(`Health check failed for project "${project.id}" at ${droplet.ip}`);
+				}
 			}
 
 			await this.env.mydb.prepare(`UPDATE project_demos SET status = 'RUNNING' WHERE project_id = ?1`).bind(project.id).run();

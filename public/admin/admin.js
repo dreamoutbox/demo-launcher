@@ -489,7 +489,7 @@ async function triggerManualCleanup(maxDemoTimeSeconds) {
             throw new Error(data.error || `HTTP ${response.status}`);
         }
 
-        const count = data.cleanedCount !== undefined ? data.cleanedCount : 0;
+        const count = data.cleanedUp !== undefined ? data.cleanedUp.length : 0;
         if (cleanupStatusMsg) {
             cleanupStatusMsg.textContent = `Cleanup completed: ${count} demo(s) cleaned up.`;
             cleanupStatusMsg.style.color = '#006600';

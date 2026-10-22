@@ -28,10 +28,12 @@
 
 - [ ] make `dev.sh` script update local `PROJECTS_JSON` secret.
 
-- [ ] env secret support. add secret env to demo server.
+- [ ] env secret support. add secret env (from project spec in `PROJECTS_JSON`) to demo server.
 
 # CHORE
 
 - [x] make admin page use basic main.css
 
 - [x] add manual cron cleanup button to admin page.
+
+- [ ] add markdown render to Project README view.
