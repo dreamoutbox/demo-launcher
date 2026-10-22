@@ -21,7 +21,8 @@ export class ProjectLauncher extends DurableObject<Env> {
 
 		const unlock = await this.mutex.lock();
 		try {
-			console.log(`\n\nenv.DO_API_KEY = ${this.env.DO_API_KEY}\n\n`);
+			// console.log(`\n\nenv.DO_API_KEY = ${this.env.DO_API_KEY}\n\n`);
+
 			const doService = getDigitalOceanService(this.env);
 			const now = Date.now();
 

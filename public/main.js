@@ -229,7 +229,7 @@ async function pollProjectStatus() {
 
 		if (state.status === 'RUNNING' && state.droplet_ip) {
 			detailIp.textContent = state.droplet_ip;
-			openIpBtn.href = `http://${state.droplet_ip}`;
+			openIpBtn.href = `http://${state.droplet_ip}${state.app_port && state.app_port !== '80' ? `:${state.app_port}` : ''}`;
 			openIpContainer.classList.remove('hidden');
 		} else if (state.status === 'LAUNCHING') {
 			detailIp.textContent = 'Still launching... fetching droplet IP...';

@@ -16,6 +16,7 @@ export interface QueueMessage {
 
 export enum ActionType {
 	LAUNCH_DEMO = 'LAUNCH_DEMO',
+	STOP_DEMO = 'STOP_DEMO',
 }
 
 export enum ActionStatus {

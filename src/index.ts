@@ -8,6 +8,32 @@ import { evaluateLaunchSchedule } from './time-range';
 export { ProjectLauncher } from './launcher';
 
 
+/**
+ * Deletes the droplet (if any) and resets the project's demo row to STOPPED.
+ *
+ * @param env - Worker environment
+ * @param doService - DigitalOcean service used to delete the droplet
+ * @param projectId - Project whose demo is stopped
+ * @param dropletId - Droplet to delete, or null if none was created yet
+ *
+ * @example
+ * await stopDemo(env, getDigitalOceanService(env, req.url), 'go-pos', 123);
+ */
+async function stopDemo(env: Env, doService: ReturnType<typeof getDigitalOceanService>, projectId: string, dropletId: number | null): Promise<void> {
+	if (dropletId) {
+		await doService.deleteDroplet(dropletId);
+	}
+
+	await env.mydb
+		.prepare(
+			`UPDATE project_demos
+             SET status = 'STOPPED', droplet_id = NULL, droplet_ip = NULL, tags = NULL, launched_at = NULL
+             WHERE project_id = ?1
+			`,
+		)
+		.bind(projectId)
+		.run();
+}
 
 /**
  * Reusable cleanup function for both Scheduled CRON and manual testing
@@ -35,19 +61,7 @@ export async function cleanupExpiredDemos(
 
 	for (const row of results) {
 		try {
-			if (row.droplet_id) {
-				await doService.deleteDroplet(row.droplet_id);
-			}
-
-			await env.mydb
-				.prepare(
-					`UPDATE project_demos
-                     SET status = 'STOPPED', droplet_id = NULL, droplet_ip = NULL, tags = NULL, launched_at = NULL
-                     WHERE project_id = ?1
-					`,
-				)
-				.bind(row.project_id)
-				.run();
+			await stopDemo(env, doService, row.project_id, row.droplet_id);
 
 			cleanedUp.push(row.project_id);
 			console.log(`[CRON] Cleaned up expired demo "${row.project_id}" (Droplet ID: ${row.droplet_id})`);
@@ -87,8 +101,11 @@ export default {
 				const isRunning = row.status === 'RUNNING' && row.launched_at !== null;
 				const uptimeMs = isRunning ? Math.max(0, now - row.launched_at!) : null;
 
+				const appPort = projects.find((p) => p.id === row.project_id)?.appPort ?? null;
+
 				return {
 					...row,
+					app_port: appPort,
 					uptime_ms: uptimeMs,
 					uptime_seconds: uptimeMs !== null ? Math.floor(uptimeMs / 1000) : null,
 					uptime_human: uptimeMs !== null ? formatUptime(uptimeMs) : null,
@@ -207,6 +224,54 @@ export default {
 				},
 				{ status: 202 },
 			);
+		}
+
+		// POST /api/admin/stop {projectId} -> Force stop: delete droplet and reset state (Admin Key protected)
+		if (pathname === '/api/admin/stop' && req.method === 'POST') {
+			if (!isAdminAuthorized(req, env)) {
+				return Response.json({ error: 'Unauthorized: invalid or missing admin key' }, { status: 401 });
+			}
+
+			const clientInfo = extractClientInfo(req);
+			const body = (await req.json().catch(() => null)) as { projectId?: string } | null;
+			const projectId = body?.projectId;
+
+			if (!projectId || !projects.some((p) => p.id === projectId)) {
+				return Response.json({ error: 'Invalid or unknown projectId' }, { status: 400 });
+			}
+
+			const row = await env.mydb
+				.prepare('SELECT droplet_id FROM project_demos WHERE project_id = ?1')
+				.bind(projectId)
+				.first<{ droplet_id: number | null }>();
+
+			try {
+				await stopDemo(env, getDigitalOceanService(env, req.url), projectId, row?.droplet_id ?? null);
+			} catch (err) {
+				const message = err instanceof Error ? err.message : String(err);
+				await recordActionLog(env, {
+					action: ActionType.STOP_DEMO,
+					projectId,
+					ipAddress: clientInfo.ipAddress,
+					country: clientInfo.country,
+					userAgent: clientInfo.userAgent,
+					status: ActionStatus.FAILED,
+					details: JSON.stringify({ error: message }),
+				});
+				return Response.json({ error: `Force stop failed: ${message}` }, { status: 500 });
+			}
+
+			await recordActionLog(env, {
+				action: ActionType.STOP_DEMO,
+				projectId,
+				ipAddress: clientInfo.ipAddress,
+				country: clientInfo.country,
+				userAgent: clientInfo.userAgent,
+				status: ActionStatus.SUCCESS,
+				details: JSON.stringify({ dropletId: row?.droplet_id ?? null }),
+			});
+
+			return Response.json({ message: `Force stopped ${projectId}`, projectId, dropletId: row?.droplet_id ?? null });
 		}
 
 		// GET /api/admin/action-logs or /api/action-logs -> Retrieve audit logs (Admin Key protected)

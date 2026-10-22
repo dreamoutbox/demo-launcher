@@ -39,6 +39,27 @@ export const DEFAULT_FIREWALL_INBOUND_RULES = [
 		},
 	},
 	{
+		protocol: 'tcp',
+		ports: '81',
+		sources: {
+			addresses: ['0.0.0.0/0', '::/0'],
+		},
+	},
+	{
+		protocol: 'tcp',
+		ports: '8080',
+		sources: {
+			addresses: ['0.0.0.0/0', '::/0'],
+		},
+	},
+	{
+		protocol: 'tcp',
+		ports: '3000',
+		sources: {
+			addresses: ['0.0.0.0/0', '::/0'],
+		},
+	},
+	{
 		protocol: 'icmp',
 		ports: '0',
 		sources: {
@@ -253,10 +274,36 @@ export class DigitalOceanProdService implements IDigitalOceanService {
 
 		if (listRes.ok) {
 			const data = (await listRes.json()) as {
-				firewalls?: Array<{ id: string; name: string; tags?: string[] }>;
+				firewalls?: Array<{
+					id: string;
+					name: string;
+					tags?: string[];
+					droplet_ids?: number[];
+					inbound_rules?: unknown[];
+				}>;
 			};
 			const existing = data.firewalls?.find((fw) => fw.name === this.firewallName);
 			if (existing) {
+				// Rule count differs from the code defaults -> push the defaults (PUT replaces rules, so keep tags/droplets)
+				if ((existing.inbound_rules?.length ?? 0) !== DEFAULT_FIREWALL_INBOUND_RULES.length) {
+					const updateRes = await fetch(`${this.baseUrl}/firewalls/${existing.id}`, {
+						method: 'PUT',
+						headers: this.headers,
+						body: JSON.stringify({
+							name: existing.name,
+							inbound_rules: DEFAULT_FIREWALL_INBOUND_RULES,
+							outbound_rules: DEFAULT_FIREWALL_OUTBOUND_RULES,
+							droplet_ids: existing.droplet_ids ?? [],
+							tags: Array.from(new Set([...(existing.tags ?? []), this.firewallTag])),
+						}),
+					});
+					if (!updateRes.ok) {
+						const errText = await updateRes.text();
+						throw new Error(`DigitalOcean update firewall rules failed (${updateRes.status}): ${errText}`);
+					}
+					this.cachedFirewallId = existing.id;
+					return existing.id;
+				}
 				if (!existing.tags?.includes(this.firewallTag)) {
 					const tagRes = await fetch(`${this.baseUrl}/firewalls/${existing.id}/tags`, {
 						method: 'POST',
@@ -367,9 +414,9 @@ export class DigitalOceanProdService implements IDigitalOceanService {
 		const dropletId = createData.droplet.id;
 
 		// Poll DigitalOcean until the public IPv4 is assigned (up to ~30 seconds)
-		const maxAttempts = 10;
+		const maxAttempts = 30;
 		for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-			await new Promise((resolve) => setTimeout(resolve, 3000));
+			await new Promise((resolve) => setTimeout(resolve, 5000));
 
 			const getRes = await fetch(`${this.baseUrl}/droplets/${dropletId}`, {
 				method: 'GET',

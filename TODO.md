@@ -22,6 +22,8 @@
 
 - [x] add ping health check
 
+- [x] add force stop api route, delete droplet. when demo instance stuck at launching.
+
 - [ ] make projects.json as secret. use `npx wrangler secret put PROJECTS_JSON < projects.json`
 
 - [ ] add shell script for update `PROJECTS_JSON` secret.

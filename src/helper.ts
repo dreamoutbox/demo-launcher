@@ -39,19 +39,20 @@ export function formatUptime(ms: number): string {
  * ```
  */
 export function buildStartupScript(repoUrl: string): string {
+    // # nginx
+    // #systemctl enable nginx
+    // #systemctl start nginx
+
     return `#!/bin/bash
 set -euo pipefail
 
 mkdir -p ./demo-launcher
 
 {
-# 1. Setup Nginx & Git first
+# 1. Setup git curl
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
-apt-get install -y nginx git curl
-
-systemctl enable nginx
-systemctl start nginx
+apt-get install -y git curl
 
 # 2. Pull Git Project
 mkdir -p /opt/demo-app
@@ -66,6 +67,7 @@ else
     echo "<h1>Demo launched for ${repoUrl}</h1>" > /var/www/html/index.html
 fi
 } 2>&1 | tee ./demo-launcher/startup.log
+
 `;
 }
 
