@@ -1,8 +1,9 @@
 import projects from './projects.json';
 import { getDigitalOceanService } from './digitalocean';
 import { formatUptime, isDevelopment } from './helper';
-import { Env, QueueMessage } from './types';
+import { ActionStatus, ActionType, Env, QueueMessage } from './types';
 import { verifyTurnstileToken, TurnstileStatus } from './turnstile';
+import { extractClientInfo, getActionLogs, isAdminAuthorized, recordActionLog } from './action-log';
 export { ProjectLauncher } from './launcher';
 
 const MAX_DEMO_TIME = 60 * 60 * 1000; // 1 hour in milliseconds
@@ -101,6 +102,7 @@ export default {
 
 		// POST /api/launch -> Triggered when user clicks a project launch button
 		if (pathname === '/api/launch' && req.method === 'POST') {
+			const clientInfo = extractClientInfo(req);
 			const body = (await req.json().catch(() => null)) as {
 				projectId?: string;
 				turnstileToken?: string;
@@ -108,14 +110,30 @@ export default {
 			} | null;
 
 			const token = body?.turnstileToken || body?.['cf-turnstile-response'];
-			const clientIp = req.headers.get('CF-Connecting-IP') ?? undefined;
+			const clientIp = clientInfo.ipAddress ?? undefined;
 			const verification = await verifyTurnstileToken(token, env, clientIp);
 
 			if (!verification.success) {
 				const isMissing = verification.status === TurnstileStatus.MISSING_TOKEN;
+				const errorMsg = isMissing ? 'Turnstile token is required' : 'Turnstile verification failed';
+
+				await recordActionLog(env, {
+					action: ActionType.LAUNCH_DEMO,
+					projectId: body?.projectId ?? null,
+					ipAddress: clientInfo.ipAddress,
+					country: clientInfo.country,
+					userAgent: clientInfo.userAgent,
+					status: ActionStatus.REJECTED,
+					details: JSON.stringify({
+						error: errorMsg,
+						turnstileStatus: verification.status,
+						errorCodes: verification.errorCodes,
+					}),
+				});
+
 				return Response.json(
 					{
-						error: isMissing ? 'Turnstile token is required' : 'Turnstile verification failed',
+						error: errorMsg,
 						status: verification.status,
 						errorCodes: verification.errorCodes,
 					},
@@ -126,11 +144,31 @@ export default {
 			const projectId = body?.projectId;
 			const project = projects.find((p) => p.id === projectId);
 			if (!project) {
+				await recordActionLog(env, {
+					action: ActionType.LAUNCH_DEMO,
+					projectId: projectId ?? null,
+					ipAddress: clientInfo.ipAddress,
+					country: clientInfo.country,
+					userAgent: clientInfo.userAgent,
+					status: ActionStatus.REJECTED,
+					details: JSON.stringify({ error: 'Invalid or unknown projectId' }),
+				});
+
 				return Response.json({ error: 'Invalid or unknown projectId' }, { status: 400 });
 			}
 
 			// Enqueue launch job
 			await env.DEMO_LAUNCHER_QUEUE.send({ projectId: project.id });
+
+			await recordActionLog(env, {
+				action: ActionType.LAUNCH_DEMO,
+				projectId: project.id,
+				ipAddress: clientInfo.ipAddress,
+				country: clientInfo.country,
+				userAgent: clientInfo.userAgent,
+				status: ActionStatus.QUEUED,
+				details: JSON.stringify({ message: `Launch request queued for ${project.name}` }),
+			});
 
 			return Response.json(
 				{
@@ -139,6 +177,26 @@ export default {
 				},
 				{ status: 202 },
 			);
+		}
+
+		// GET /api/admin/action-logs or /api/action-logs -> Retrieve audit logs (Admin Key protected)
+		if ((pathname === '/api/admin/action-logs' || pathname === '/api/action-logs') && req.method === 'GET') {
+			if (!isAdminAuthorized(req, env)) {
+				return Response.json(
+					{ error: 'Unauthorized: invalid or missing admin key' },
+					{ status: 401 },
+				);
+			}
+
+			const limitParam = searchParams.get('limit');
+			const offsetParam = searchParams.get('offset');
+			const projectId = searchParams.get('projectId') || undefined;
+
+			const limit = limitParam ? Math.min(Math.max(1, parseInt(limitParam, 10) || 50), 500) : 50;
+			const offset = offsetParam ? Math.max(0, parseInt(offsetParam, 10) || 0) : 0;
+
+			const result = await getActionLogs(env, { limit, offset, projectId });
+			return Response.json(result);
 		}
 
 		// GET or POST /api/cron-cleanup -> Manually trigger cleanup with custom max demo time (Dev only)
@@ -165,7 +223,20 @@ export default {
 			});
 		}
 
-		return new Response('Use GET /api/projects, POST /api/launch, or GET /api/cron-cleanup?maxDemoTimeSeconds=2');
+		// Friendly redirect for /admin/action_log to HTML page
+		if (pathname === '/admin/action_log' || pathname === '/admin/action_log/') {
+			return Response.redirect(`${url.origin}/admin/action_log.html`, 301);
+		}
+
+		// Serve static assets if ASSETS binding is available
+		if (env.ASSETS) {
+			const assetRes = await env.ASSETS.fetch(req);
+			if (assetRes.status !== 404) {
+				return assetRes;
+			}
+		}
+
+		return new Response('Use GET /api/projects, POST /api/launch, GET /api/admin/action-logs, or GET /api/cron-cleanup?maxDemoTimeSeconds=2');
 	},
 
 	async queue(batch, env, ctx): Promise<void> {

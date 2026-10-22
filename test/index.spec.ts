@@ -13,7 +13,7 @@ import { DigitalOceanMockService } from '../src/digitalocean.mock';
 import { DigitalOceanProdService } from '../src/digitalocean.prod';
 import { getDigitalOceanService, isRealApiEnabled } from '../src/digitalocean';
 import { buildStartupScript } from '../src/helper';
-import { Env, QueueMessage } from '../src/types';
+import { ActionLogRecord, ActionStatus, ActionType, Env, QueueMessage } from '../src/types';
 
 // Cast test env to our strict Env interface
 const testEnv = env as unknown as Env;
@@ -22,7 +22,7 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 	const testProject = projects[0]; // e.g., "awesome-shop-demo"
 
 	beforeEach(async () => {
-		// Reset and recreate the D1 table in local memory before each test
+		// Reset and recreate the D1 tables in local memory before each test
 		await testEnv.mydb.prepare('DROP TABLE IF EXISTS project_demos').run();
 		await testEnv.mydb
 			.prepare(
@@ -35,6 +35,24 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
                 )`,
 			)
 			.run();
+
+		await testEnv.mydb.prepare('DROP TABLE IF EXISTS action_logs').run();
+		await testEnv.mydb
+			.prepare(
+				`CREATE TABLE action_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    action TEXT NOT NULL,
+                    project_id TEXT,
+                    ip_address TEXT,
+                    country TEXT,
+                    user_agent TEXT,
+                    status TEXT NOT NULL,
+                    details TEXT,
+                    created_at INTEGER NOT NULL
+                )`,
+			)
+			.run();
+
 		vi.restoreAllMocks();
 	});
 
@@ -320,5 +338,123 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 		expect(postedBody.region).toBe('nyc1');
 		expect(postedBody.size).toBe('s-2vcpu-4gb');
 		expect(postedBody.image).toBe('debian-12-x64');
+	});
+
+	it('8. POST /api/launch should log action requests in action_logs table', async () => {
+		// Test rejected launch logs
+		const rejectReq = new Request('http://localhost/api/launch', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'CF-Connecting-IP': '198.51.100.42',
+				'CF-IPCountry': 'SG',
+				'User-Agent': 'TestBrowser/1.0',
+			},
+			body: JSON.stringify({ projectId: testProject.id }),
+		});
+
+		const ctx1 = createExecutionContext();
+		const res1 = await worker.fetch(rejectReq as any, testEnv, ctx1);
+		await waitOnExecutionContext(ctx1);
+		expect(res1.status).toBe(400);
+
+		const { results: rejectedLogs } = await testEnv.mydb
+			.prepare('SELECT * FROM action_logs WHERE ip_address = ?1')
+			.bind('198.51.100.42')
+			.all<ActionLogRecord>();
+
+		expect(rejectedLogs.length).toBe(1);
+		expect(rejectedLogs[0].action).toBe(ActionType.LAUNCH_DEMO);
+		expect(rejectedLogs[0].status).toBe(ActionStatus.REJECTED);
+		expect(rejectedLogs[0].country).toBe('SG');
+		expect(rejectedLogs[0].user_agent).toBe('TestBrowser/1.0');
+
+		// Test queued launch logs
+		const queuedReq = new Request('http://localhost/api/launch', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'CF-Connecting-IP': '203.0.113.88',
+				'CF-IPCountry': 'JP',
+				'User-Agent': 'Mozilla/5.0 DemoClient',
+			},
+			body: JSON.stringify({ projectId: testProject.id, turnstileToken: 'dev-token' }),
+		});
+
+		const ctx2 = createExecutionContext();
+		const res2 = await worker.fetch(queuedReq as any, testEnv, ctx2);
+		await waitOnExecutionContext(ctx2);
+		expect(res2.status).toBe(202);
+
+		const { results: queuedLogs } = await testEnv.mydb
+			.prepare('SELECT * FROM action_logs WHERE ip_address = ?1')
+			.bind('203.0.113.88')
+			.all<ActionLogRecord>();
+
+		expect(queuedLogs.length).toBe(1);
+		expect(queuedLogs[0].action).toBe(ActionType.LAUNCH_DEMO);
+		expect(queuedLogs[0].status).toBe(ActionStatus.QUEUED);
+		expect(queuedLogs[0].project_id).toBe(testProject.id);
+		expect(queuedLogs[0].country).toBe('JP');
+	});
+
+	it('9. GET /api/admin/action-logs should require ADMIN_KEY and return logs', async () => {
+		// Populate some log records first
+		await testEnv.mydb
+			.prepare(
+				`INSERT INTO action_logs (action, project_id, ip_address, country, user_agent, status, details, created_at)
+                 VALUES ('LAUNCH_DEMO', 'awesome-shop-demo', '192.0.2.1', 'US', 'TestAgent', 'QUEUED', 'Queued', ?1)`,
+			)
+			.bind(Date.now())
+			.run();
+
+		// Request without admin key -> 401
+		const unauthReq = new Request('http://localhost/api/admin/action-logs', { method: 'GET' });
+		const ctx1 = createExecutionContext();
+		const unauthRes = await worker.fetch(unauthReq as any, testEnv, ctx1);
+		await waitOnExecutionContext(ctx1);
+		expect(unauthRes.status).toBe(401);
+
+		// Request with invalid admin key -> 401
+		const badKeyReq = new Request('http://localhost/api/admin/action-logs', {
+			method: 'GET',
+			headers: { 'x-admin-key': 'wrong-key' },
+		});
+		const ctx2 = createExecutionContext();
+		const badKeyRes = await worker.fetch(badKeyReq as any, testEnv, ctx2);
+		await waitOnExecutionContext(ctx2);
+		expect(badKeyRes.status).toBe(401);
+
+		// Request with valid admin key in x-admin-key header -> 200
+		const headerReq = new Request('http://localhost/api/admin/action-logs', {
+			method: 'GET',
+			headers: { 'x-admin-key': 'test-admin-key' },
+		});
+		const ctx3 = createExecutionContext();
+		const headerRes = await worker.fetch(headerReq as any, testEnv, ctx3);
+		await waitOnExecutionContext(ctx3);
+		expect(headerRes.status).toBe(200);
+		const headerData = (await headerRes.json()) as { logs: ActionLogRecord[]; total: number };
+		expect(headerData.total).toBeGreaterThanOrEqual(1);
+		expect(headerData.logs[0].project_id).toBe('awesome-shop-demo');
+
+		// Request with valid admin key in Authorization Bearer header -> 200
+		const bearerReq = new Request('http://localhost/api/admin/action-logs', {
+			method: 'GET',
+			headers: { Authorization: 'Bearer test-admin-key' },
+		});
+		const ctx4 = createExecutionContext();
+		const bearerRes = await worker.fetch(bearerReq as any, testEnv, ctx4);
+		await waitOnExecutionContext(ctx4);
+		expect(bearerRes.status).toBe(200);
+
+		// Request with valid admin key in query parameter -> 200
+		const queryReq = new Request('http://localhost/api/admin/action-logs?key=test-admin-key', {
+			method: 'GET',
+		});
+		const ctx5 = createExecutionContext();
+		const queryRes = await worker.fetch(queryReq as any, testEnv, ctx5);
+		await waitOnExecutionContext(ctx5);
+		expect(queryRes.status).toBe(200);
 	});
 });

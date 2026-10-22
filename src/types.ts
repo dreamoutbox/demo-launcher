@@ -13,6 +13,29 @@ export interface QueueMessage {
 	projectId: string;
 }
 
+export enum ActionType {
+	LAUNCH_DEMO = 'LAUNCH_DEMO',
+}
+
+export enum ActionStatus {
+	QUEUED = 'QUEUED',
+	REJECTED = 'REJECTED',
+	SUCCESS = 'SUCCESS',
+	FAILED = 'FAILED',
+}
+
+export interface ActionLogRecord {
+	id: number;
+	action: ActionType | string;
+	project_id: string | null;
+	ip_address: string | null;
+	country: string | null;
+	user_agent: string | null;
+	status: ActionStatus | string;
+	details: string | null;
+	created_at: number;
+}
+
 export interface Env {
 	mydb: D1Database;
 	DEMO_LAUNCHER_QUEUE: Queue<QueueMessage>;
@@ -25,4 +48,6 @@ export interface Env {
 	ENVIRONMENT?: 'development' | 'production';
 	TURNSTILE_SECRET_KEY?: string;
 	TURNSTILE_SITE_KEY?: string;
+	ADMIN_KEY?: string;
+	ASSETS?: Fetcher;
 }

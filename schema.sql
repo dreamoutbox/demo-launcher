@@ -17,3 +17,18 @@ CREATE TABLE IF NOT EXISTS project_demos (
     droplet_ip TEXT,
     launched_at INTEGER   -- Unix timestamp in milliseconds
 );
+
+CREATE TABLE IF NOT EXISTS action_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    action TEXT NOT NULL,
+    project_id TEXT,
+    ip_address TEXT,
+    country TEXT,
+    user_agent TEXT,
+    status TEXT NOT NULL,
+    details TEXT,
+    created_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_action_logs_created_at ON action_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_action_logs_project_id ON action_logs(project_id);

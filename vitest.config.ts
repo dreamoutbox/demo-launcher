@@ -11,6 +11,7 @@ export default defineConfig({
 					ENVIRONMENT: 'development',
 					DO_API_KEY: 'mock-test-api-key',
 					DO_USE_REAL_API: 'false',
+					ADMIN_KEY: 'test-admin-key',
 				},
 			},
 		}),

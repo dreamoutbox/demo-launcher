@@ -1,0 +1,1242 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Action Logs - Demo Launcher Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet" />
+  <style>
+    :root {
+      --bg-base: #090d16;
+      --bg-surface: #0f172a;
+      --bg-surface-elevated: #162036;
+      --bg-surface-hover: #1e293b;
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-focus: #3b82f6;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --primary-glow: rgba(59, 130, 246, 0.35);
+      --success-text: #34d399;
+      --success-bg: rgba(52, 211, 153, 0.12);
+      --success-border: rgba(52, 211, 153, 0.25);
+      --danger-text: #fb7185;
+      --danger-bg: rgba(251, 113, 133, 0.12);
+      --danger-border: rgba(251, 113, 133, 0.25);
+      --warning-text: #fbbf24;
+      --warning-bg: rgba(251, 191, 36, 0.12);
+      --warning-border: rgba(251, 191, 36, 0.25);
+      --code-bg: #0b1120;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-base);
+      background-image:
+        radial-gradient(circle at 50% 0%, rgba(37, 99, 235, 0.15) 0%, transparent 60%),
+        radial-gradient(circle at 100% 50%, rgba(99, 102, 241, 0.08) 0%, transparent 50%);
+      background-attachment: fixed;
+      color: var(--text-main);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      line-height: 1.5;
+      padding: 24px;
+    }
+
+    .container {
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+
+    /* Top Navigation */
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border-subtle);
+      margin-bottom: 24px;
+    }
+
+    .header-left {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+      transition: color 0.15s ease;
+    }
+
+    .back-link:hover {
+      color: var(--primary);
+    }
+
+    .back-link svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .live-dot {
+      width: 8px;
+      height: 8px;
+      background: #10b981;
+      border-radius: 50%;
+      box-shadow: 0 0 10px #10b981;
+      display: inline-block;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .key-bar {
+      display: flex;
+      align-items: center;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 4px 6px;
+      gap: 6px;
+    }
+
+    .key-bar input {
+      background: transparent;
+      border: none;
+      color: #fff;
+      font-size: 13px;
+      padding: 6px 8px;
+      font-family: 'JetBrains Mono', monospace;
+      width: 180px;
+      outline: none;
+    }
+
+    .key-bar input::placeholder {
+      color: var(--text-dim);
+    }
+
+    /* Buttons */
+    button,
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      background: var(--bg-surface-elevated);
+      color: var(--text-main);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 7px 12px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-decoration: none;
+    }
+
+    button:hover,
+    .btn:hover {
+      background: var(--bg-surface-hover);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    button.btn-primary {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+      box-shadow: 0 2px 8px var(--primary-glow);
+    }
+
+    button.btn-primary:hover {
+      background: var(--primary-hover);
+      border-color: var(--primary-hover);
+    }
+
+    button.btn-sm {
+      padding: 4px 8px;
+      font-size: 12px;
+    }
+
+    /* Metric Cards */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .metric-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .metric-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+    }
+
+    .metric-value {
+      font-size: 26px;
+      font-weight: 700;
+      color: #fff;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Controls Bar */
+    .controls-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 14px 18px;
+      margin-bottom: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .controls-left {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .search-input-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .search-input-wrap svg {
+      position: absolute;
+      left: 10px;
+      width: 14px;
+      height: 14px;
+      color: var(--text-dim);
+      pointer-events: none;
+    }
+
+    .search-input-wrap input {
+      background: var(--bg-surface-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      color: #fff;
+      font-size: 13px;
+      padding: 7px 10px 7px 32px;
+      width: 220px;
+      outline: none;
+      transition: border-color 0.15s ease;
+    }
+
+    .search-input-wrap input:focus {
+      border-color: var(--border-focus);
+    }
+
+    select {
+      background: var(--bg-surface-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      color: var(--text-main);
+      font-size: 13px;
+      padding: 7px 12px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    select:focus {
+      border-color: var(--border-focus);
+    }
+
+    .controls-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .auto-refresh-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--text-muted);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .auto-refresh-toggle input {
+      accent-color: var(--primary);
+      cursor: pointer;
+    }
+
+    /* Table & Container */
+    .table-container {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 13px;
+    }
+
+    thead th {
+      background: var(--bg-surface-elevated);
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border-subtle);
+      white-space: nowrap;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid var(--border-subtle);
+      transition: background 0.15s ease;
+    }
+
+    tbody tr:last-child {
+      border-bottom: none;
+    }
+
+    tbody tr:hover {
+      background: var(--bg-surface-hover);
+    }
+
+    td {
+      padding: 12px 16px;
+      vertical-align: middle;
+    }
+
+    /* Badges */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 8px;
+      border-radius: 9999px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+
+    .badge-queued,
+    .badge-success {
+      color: var(--success-text);
+      background: var(--success-bg);
+      border-color: var(--success-border);
+    }
+
+    .badge-rejected,
+    .badge-failed {
+      color: var(--danger-text);
+      background: var(--danger-bg);
+      border-color: var(--danger-border);
+    }
+
+    .badge-action {
+      background: rgba(99, 102, 241, 0.15);
+      color: #a5b4fc;
+      border-color: rgba(99, 102, 241, 0.3);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .badge-country {
+      background: var(--bg-surface-elevated);
+      color: var(--text-muted);
+      border: 1px solid var(--border-subtle);
+      font-size: 10px;
+      padding: 2px 5px;
+      border-radius: 4px;
+      margin-left: 6px;
+      font-weight: 600;
+    }
+
+    /* Code styling */
+    .code-pill {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      background: var(--code-bg);
+      border: 1px solid var(--border-subtle);
+      padding: 2px 7px;
+      border-radius: 4px;
+      color: #93c5fd;
+    }
+
+    .ip-cell {
+      display: inline-flex;
+      align-items: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: #cbd5e1;
+    }
+
+    .copy-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
+      padding: 2px 4px;
+      cursor: pointer;
+      margin-left: 4px;
+      border-radius: 4px;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .copy-btn:hover {
+      color: #fff;
+      background: var(--bg-surface-elevated);
+    }
+
+    .user-agent-text {
+      color: var(--text-dim);
+      font-size: 11px;
+      max-width: 240px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .time-primary {
+      color: #f1f5f9;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    .time-relative {
+      color: var(--text-dim);
+      font-size: 11px;
+    }
+
+    /* Pagination Bar */
+    .pagination-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 18px;
+      background: var(--bg-surface);
+      border-top: 1px solid var(--border-subtle);
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .pagination-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    /* Modals & States */
+    .empty-state,
+    .auth-prompt {
+      padding: 48px 24px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      color: var(--text-muted);
+    }
+
+    .state-icon {
+      width: 48px;
+      height: 48px;
+      color: var(--text-dim);
+      margin-bottom: 4px;
+    }
+
+    .auth-card {
+      max-width: 440px;
+      margin: 40px auto;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 32px 28px;
+      text-align: center;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    }
+
+    .auth-card h2 {
+      font-size: 18px;
+      margin-bottom: 8px;
+      color: #fff;
+    }
+
+    .auth-card p {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+
+    .auth-input-group {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .auth-input-group input {
+      flex: 1;
+      background: var(--bg-surface-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      color: #fff;
+      font-size: 13px;
+      padding: 8px 12px;
+      font-family: 'JetBrains Mono', monospace;
+      outline: none;
+    }
+
+    .auth-input-group input:focus {
+      border-color: var(--border-focus);
+    }
+
+    .auth-tip {
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 20px;
+    }
+
+    .modal-content {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      width: 100%;
+      max-width: 600px;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+    }
+
+    .modal-header {
+      padding: 16px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .modal-header h3 {
+      font-size: 16px;
+      color: #fff;
+    }
+
+    .modal-body {
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    pre.json-viewer {
+      background: var(--code-bg);
+      border: 1px solid var(--border-subtle);
+      padding: 14px;
+      border-radius: 8px;
+      color: #7dd3fc;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .spinning {
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header>
+      <div class="header-left">
+        <a href="/" class="back-link">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+          </svg>
+          Back to Demo Launcher
+        </a>
+        <h1>
+          Action Logs Audit Trail
+          <span class="live-dot" title="Live System Active"></span>
+        </h1>
+      </div>
+
+      <div class="header-right">
+        <div class="key-bar" id="key-bar-container">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+            <path d="M7 11V7a5 5 0 0110 0v4" />
+          </svg>
+          <input type="password" id="admin-key-input" placeholder="Admin Key..." autocomplete="off" />
+          <button type="button" id="toggle-key-visibility-btn" class="btn btn-sm" title="Show/Hide Key">
+            <svg id="eye-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          </button>
+          <button type="button" id="save-key-btn" class="btn btn-sm btn-primary">Set</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Authentication Required Card -->
+    <div id="auth-wall" class="auth-card hidden">
+      <svg class="state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      </svg>
+      <h2>Admin Authentication Required</h2>
+      <p>Supply your configured <code>ADMIN_KEY</code> to access and monitor action audit records.</p>
+      <div class="auth-input-group">
+        <input type="password" id="auth-wall-key-input" placeholder="Enter ADMIN_KEY..." />
+        <button type="button" id="auth-wall-submit-btn" class="btn btn-primary">Authenticate</button>
+      </div>
+      <div class="auth-tip">Tip: Set <code>ADMIN_KEY</code> in your environment variables or query parameter
+        <code>?key=...</code></div>
+    </div>
+
+    <!-- Main Content (Metrics + Controls + Table) -->
+    <div id="main-content">
+      <!-- Metric Cards -->
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-label">Total Logged Actions</div>
+          <div class="metric-value" id="metric-total">-</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Queued Launches</div>
+          <div class="metric-value" id="metric-queued" style="color: var(--success-text);">-</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Rejected Requests</div>
+          <div class="metric-value" id="metric-rejected" style="color: var(--danger-text);">-</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Unique Clients (IPs)</div>
+          <div class="metric-value" id="metric-unique-ips">-</div>
+        </div>
+      </div>
+
+      <!-- Controls & Search -->
+      <div class="controls-card">
+        <div class="controls-left">
+          <div class="search-input-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8" />
+              <path d="M21 21l-4.35-4.35" />
+            </svg>
+            <input type="text" id="filter-search" placeholder="Search IP, Project, Agent..." />
+          </div>
+
+          <select id="filter-status">
+            <option value="">All Statuses</option>
+            <option value="QUEUED">QUEUED</option>
+            <option value="REJECTED">REJECTED</option>
+            <option value="SUCCESS">SUCCESS</option>
+            <option value="FAILED">FAILED</option>
+          </select>
+
+          <select id="filter-project">
+            <option value="">All Projects</option>
+          </select>
+        </div>
+
+        <div class="controls-right">
+          <label class="auto-refresh-toggle" title="Poll every 5 seconds for new logs">
+            <input type="checkbox" id="auto-refresh-check" />
+            Auto-refresh (5s)
+          </label>
+          <button type="button" id="refresh-btn" class="btn btn-primary">
+            <svg id="refresh-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2">
+              <path d="M23 4v6h-6M1 20v-6h6" />
+              <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+            </svg>
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      <!-- Action Logs Table Container -->
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Action</th>
+              <th>Status</th>
+              <th>Project ID</th>
+              <th>Client IP &amp; Country</th>
+              <th>User Agent</th>
+              <th>Details</th>
+            </tr>
+          </thead>
+          <tbody id="logs-tbody">
+            <tr>
+              <td colspan="7" class="empty-state">Loading action logs...</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Pagination Controls -->
+        <div class="pagination-bar" id="pagination-bar">
+          <div id="pagination-info">Showing 0 of 0 logs</div>
+          <div class="pagination-actions">
+            <button type="button" id="prev-page-btn" class="btn btn-sm" disabled>&larr; Previous</button>
+            <button type="button" id="next-page-btn" class="btn btn-sm" disabled>Next &rarr;</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Inspector Modal -->
+    <div id="details-modal" class="modal-overlay hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 id="modal-title">Action Log Details</h3>
+          <button type="button" id="modal-close-btn" class="btn btn-sm">&times;</button>
+        </div>
+        <div class="modal-body">
+          <pre id="modal-json" class="json-viewer"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * Action Log Audit Viewer Client Script
+     */
+    const STORAGE_KEY = 'demo_launcher_admin_key';
+    let currentLogs = [];
+    let currentPage = 0;
+    const pageSize = 50;
+    let autoRefreshTimer = null;
+
+    // DOM Elements
+    const authWall = document.getElementById('auth-wall');
+    const mainContent = document.getElementById('main-content');
+    const adminKeyInput = document.getElementById('admin-key-input');
+    const saveKeyBtn = document.getElementById('save-key-btn');
+    const toggleKeyVisibilityBtn = document.getElementById('toggle-key-visibility-btn');
+    const authWallKeyInput = document.getElementById('auth-wall-key-input');
+    const authWallSubmitBtn = document.getElementById('auth-wall-submit-btn');
+
+    const logsTbody = document.getElementById('logs-tbody');
+    const refreshBtn = document.getElementById('refresh-btn');
+    const refreshIcon = document.getElementById('refresh-icon');
+    const autoRefreshCheck = document.getElementById('auto-refresh-check');
+    const filterSearch = document.getElementById('filter-search');
+    const filterStatus = document.getElementById('filter-status');
+    const filterProject = document.getElementById('filter-project');
+
+    const paginationInfo = document.getElementById('pagination-info');
+    const prevPageBtn = document.getElementById('prev-page-btn');
+    const nextPageBtn = document.getElementById('next-page-btn');
+
+    const metricTotal = document.getElementById('metric-total');
+    const metricQueued = document.getElementById('metric-queued');
+    const metricRejected = document.getElementById('metric-rejected');
+    const metricUniqueIps = document.getElementById('metric-unique-ips');
+
+    const detailsModal = document.getElementById('details-modal');
+    const modalCloseBtn = document.getElementById('modal-close-btn');
+    const modalJson = document.getElementById('modal-json');
+
+    /**
+     * Resolves the current admin key from URL query or localStorage.
+     *
+     * @returns The active admin key string or null if unconfigured
+     *
+     * @example
+     * ```ts
+     * const key = getStoredAdminKey();
+     * ```
+     */
+    function getStoredAdminKey() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlKey = urlParams.get('admin_key') || urlParams.get('key');
+      if (urlKey) {
+        localStorage.setItem(STORAGE_KEY, urlKey);
+        return urlKey;
+      }
+      return localStorage.getItem(STORAGE_KEY) || '';
+    }
+
+    /**
+     * Stores the admin key into localStorage and updates input UI.
+     *
+     * @param key - The admin key string to store
+     *
+     * @example
+     * ```ts
+     * setStoredAdminKey('secret-123');
+     * ```
+     */
+    function setStoredAdminKey(key) {
+      const cleanKey = (key || '').trim();
+      if (cleanKey) {
+        localStorage.setItem(STORAGE_KEY, cleanKey);
+      } else {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+      adminKeyInput.value = cleanKey;
+      authWallKeyInput.value = cleanKey;
+    }
+
+    /**
+     * Formats an epoch millisecond timestamp to local string and relative label.
+     *
+     * @param ms - Unix epoch in milliseconds
+     * @returns Object with formatted date string and relative string
+     *
+     * @example
+     * ```ts
+     * const { formatted, relative } = formatTime(1771579200000);
+     * ```
+     */
+    function formatTime(ms) {
+      if (!ms) return { formatted: '-', relative: '-' };
+      const date = new Date(ms);
+      const formatted = date.toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      });
+
+      const diffSec = Math.floor((Date.now() - ms) / 1000);
+      let relative = 'just now';
+      if (diffSec >= 60 && diffSec < 3600) {
+        relative = `${Math.floor(diffSec / 60)}m ago`;
+      } else if (diffSec >= 3600 && diffSec < 86400) {
+        relative = `${Math.floor(diffSec / 3600)}h ago`;
+      } else if (diffSec >= 86400) {
+        relative = `${Math.floor(diffSec / 86400)}d ago`;
+      } else if (diffSec > 5) {
+        relative = `${diffSec}s ago`;
+      }
+
+      return { formatted, relative };
+    }
+
+    /**
+     * Fetches action logs from the backend API using the configured admin key.
+     *
+     * @param page - Current zero-indexed page offset
+     * @returns Promise resolving when data has been loaded and rendered
+     *
+     * @example
+     * ```ts
+     * await fetchActionLogs(0);
+     * ```
+     */
+    async function fetchActionLogs(page = 0) {
+      const key = getStoredAdminKey();
+      if (!key) {
+        showAuthWall();
+        return;
+      }
+
+      refreshIcon.classList.add('spinning');
+      const offset = page * pageSize;
+
+      try {
+        const response = await fetch(`/api/admin/action-logs?limit=${pageSize}&offset=${offset}`, {
+          headers: {
+            'x-admin-key': key,
+          },
+        });
+
+        if (response.status === 401) {
+          showAuthWall();
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error(`HTTP error ${response.status}`);
+        }
+
+        const data = await response.json();
+        hideAuthWall();
+        currentLogs = data.logs || [];
+        currentPage = page;
+
+        updateMetrics(currentLogs, data.total || currentLogs.length);
+        populateProjectFilter(currentLogs);
+        renderTable();
+
+        // Update pagination
+        const total = data.total || currentLogs.length;
+        const start = total === 0 ? 0 : offset + 1;
+        const end = Math.min(offset + pageSize, total);
+        paginationInfo.textContent = `Showing ${start} - ${end} of ${total} logs`;
+        prevPageBtn.disabled = page === 0;
+        nextPageBtn.disabled = end >= total;
+      } catch (err) {
+        console.error('Failed to fetch action logs:', err);
+        logsTbody.innerHTML = `<tr><td colspan="7" class="empty-state" style="color: var(--danger-text);">Failed to load action logs. Verify network connection and API server.</td></tr>`;
+      } finally {
+        refreshIcon.classList.remove('spinning');
+      }
+    }
+
+    /**
+     * Updates top metric cards based on log data.
+     *
+     * @param logs - Array of retrieved ActionLogRecord objects
+     * @param totalCount - Total number of records reported by API
+     *
+     * @example
+     * ```ts
+     * updateMetrics(logs, 142);
+     * ```
+     */
+    function updateMetrics(logs, totalCount) {
+      metricTotal.textContent = totalCount.toLocaleString();
+
+      const queuedCount = logs.filter((l) => l.status === 'QUEUED' || l.status === 'SUCCESS').length;
+      metricQueued.textContent = queuedCount;
+
+      const rejectedCount = logs.filter((l) => l.status === 'REJECTED' || l.status === 'FAILED').length;
+      metricRejected.textContent = rejectedCount;
+
+      const ips = new Set(logs.map((l) => l.ip_address).filter(Boolean));
+      metricUniqueIps.textContent = ips.size;
+    }
+
+    /**
+     * Dynamically populates the Project filter dropdown based on available project IDs.
+     *
+     * @param logs - Array of ActionLogRecord objects
+     *
+     * @example
+     * ```ts
+     * populateProjectFilter(logs);
+     * ```
+     */
+    function populateProjectFilter(logs) {
+      const selectedValue = filterProject.value;
+      const projects = Array.from(new Set(logs.map((l) => l.project_id).filter(Boolean)));
+
+      // Keep default option
+      filterProject.innerHTML = '<option value="">All Projects</option>';
+      for (const proj of projects) {
+        const opt = document.createElement('option');
+        opt.value = proj;
+        opt.textContent = proj;
+        if (proj === selectedValue) opt.selected = true;
+        filterProject.appendChild(opt);
+      }
+    }
+
+    /**
+     * Renders the current action logs to the table matching filter criteria.
+     *
+     * @example
+     * ```ts
+     * renderTable();
+     * ```
+     */
+    function renderTable() {
+      const query = filterSearch.value.toLowerCase().trim();
+      const statusFilter = filterStatus.value;
+      const projectFilter = filterProject.value;
+
+      const filtered = currentLogs.filter((log) => {
+        if (statusFilter && log.status !== statusFilter) return false;
+        if (projectFilter && log.project_id !== projectFilter) return false;
+        if (query) {
+          const matchIp = (log.ip_address || '').toLowerCase().includes(query);
+          const matchProj = (log.project_id || '').toLowerCase().includes(query);
+          const matchAgent = (log.user_agent || '').toLowerCase().includes(query);
+          const matchCountry = (log.country || '').toLowerCase().includes(query);
+          const matchDetails = (log.details || '').toLowerCase().includes(query);
+          if (!matchIp && !matchProj && !matchAgent && !matchCountry && !matchDetails) {
+            return false;
+          }
+        }
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        logsTbody.innerHTML = `<tr><td colspan="7" class="empty-state">No matching action logs found.</td></tr>`;
+        return;
+      }
+
+      logsTbody.innerHTML = filtered
+        .map((log) => {
+          const { formatted, relative } = formatTime(log.created_at);
+          const statusLower = (log.status || '').toLowerCase();
+          const badgeClass = statusLower === 'queued' || statusLower === 'success'
+            ? 'badge-queued'
+            : 'badge-rejected';
+
+          const ipDisplay = log.ip_address || 'unknown';
+          const countryDisplay = log.country ? `<span class="badge-country">${log.country}</span>` : '';
+          const projectDisplay = log.project_id
+            ? `<span class="code-pill">${escapeHtml(log.project_id)}</span>`
+            : '<span style="color: var(--text-dim);">-</span>';
+
+          const detailsPreview = log.details ? 'Inspect' : '-';
+
+          return `
+            <tr>
+              <td>
+                <div class="time-primary">${formatted}</div>
+                <div class="time-relative">${relative}</div>
+              </td>
+              <td><span class="badge badge-action">${escapeHtml(log.action)}</span></td>
+              <td><span class="badge ${badgeClass}">${escapeHtml(log.status)}</span></td>
+              <td>${projectDisplay}</td>
+              <td>
+                <div class="ip-cell">
+                  <span>${escapeHtml(ipDisplay)}</span>
+                  ${countryDisplay}
+                  <button type="button" class="copy-btn" onclick="copyToClipboard('${escapeHtml(ipDisplay)}')" title="Copy IP">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                  </button>
+                </div>
+              </td>
+              <td>
+                <div class="user-agent-text" title="${escapeHtml(log.user_agent || '')}">${escapeHtml(log.user_agent || '-')}</div>
+              </td>
+              <td>
+                ${log.details ? `<button type="button" class="btn btn-sm" onclick="openDetailsModal(${log.id})">Details</button>` : '<span style="color: var(--text-dim);">-</span>'}
+              </td>
+            </tr>
+          `;
+        })
+        .join('');
+    }
+
+    /**
+     * Opens details modal displaying structured JSON for a given log ID.
+     *
+     * @param logId - Record identifier
+     *
+     * @example
+     * ```ts
+     * openDetailsModal(42);
+     * ```
+     */
+    window.openDetailsModal = function (logId) {
+      const log = currentLogs.find((l) => l.id === logId);
+      if (!log) return;
+
+      let parsedDetails = log.details;
+      try {
+        parsedDetails = JSON.parse(log.details || '{}');
+      } catch {
+        // Keep as string
+      }
+
+      const fullPayload = {
+        id: log.id,
+        action: log.action,
+        status: log.status,
+        project_id: log.project_id,
+        ip_address: log.ip_address,
+        country: log.country,
+        user_agent: log.user_agent,
+        created_at: log.created_at,
+        created_at_iso: new Date(log.created_at).toISOString(),
+        details: parsedDetails,
+      };
+
+      modalJson.textContent = JSON.stringify(fullPayload, null, 2);
+      detailsModal.classList.remove('hidden');
+    };
+
+    /**
+     * Copies a string value to the user's clipboard.
+     *
+     * @param text - Text string to copy
+     *
+     * @example
+     * ```ts
+     * copyToClipboard('198.51.100.1');
+     * ```
+     */
+    window.copyToClipboard = function (text) {
+      if (!navigator.clipboard) return;
+      navigator.clipboard.writeText(text);
+    };
+
+    /**
+     * Escapes HTML entities to prevent XSS.
+     *
+     * @param str - Input string
+     * @returns Escaped HTML string
+     *
+     * @example
+     * ```ts
+     * const safe = escapeHtml('<script>');
+     * ```
+     */
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function showAuthWall() {
+      authWall.classList.remove('hidden');
+      mainContent.classList.add('hidden');
+    }
+
+    function hideAuthWall() {
+      authWall.classList.add('hidden');
+      mainContent.classList.remove('hidden');
+    }
+
+    // Event Listeners
+    saveKeyBtn.addEventListener('click', () => {
+      setStoredAdminKey(adminKeyInput.value);
+      fetchActionLogs(0);
+    });
+
+    adminKeyInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        setStoredAdminKey(adminKeyInput.value);
+        fetchActionLogs(0);
+      }
+    });
+
+    toggleKeyVisibilityBtn.addEventListener('click', () => {
+      const isPassword = adminKeyInput.type === 'password';
+      adminKeyInput.type = isPassword ? 'text' : 'password';
+    });
+
+    authWallSubmitBtn.addEventListener('click', () => {
+      setStoredAdminKey(authWallKeyInput.value);
+      fetchActionLogs(0);
+    });
+
+    authWallKeyInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        setStoredAdminKey(authWallKeyInput.value);
+        fetchActionLogs(0);
+      }
+    });
+
+    refreshBtn.addEventListener('click', () => fetchActionLogs(currentPage));
+
+    filterSearch.addEventListener('input', renderTable);
+    filterStatus.addEventListener('change', renderTable);
+    filterProject.addEventListener('change', renderTable);
+
+    prevPageBtn.addEventListener('click', () => {
+      if (currentPage > 0) fetchActionLogs(currentPage - 1);
+    });
+
+    nextPageBtn.addEventListener('click', () => {
+      fetchActionLogs(currentPage + 1);
+    });
+
+    modalCloseBtn.addEventListener('click', () => {
+      detailsModal.classList.add('hidden');
+    });
+
+    detailsModal.addEventListener('click', (e) => {
+      if (e.target === detailsModal) detailsModal.classList.add('hidden');
+    });
+
+    autoRefreshCheck.addEventListener('change', (e) => {
+      if (e.target.checked) {
+        autoRefreshTimer = setInterval(() => fetchActionLogs(currentPage), 5000);
+      } else {
+        if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+        autoRefreshTimer = null;
+      }
+    });
+
+    // Initialize state on load
+    const initialKey = getStoredAdminKey();
+    if (initialKey) {
+      adminKeyInput.value = initialKey;
+      authWallKeyInput.value = initialKey;
+    }
+    fetchActionLogs(0);
+  </script>
+</body>
+
+</html>
