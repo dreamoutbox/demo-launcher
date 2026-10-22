@@ -111,3 +111,14 @@ export const DEFAULT_FIREWALL_TAG = 'demo-launcher-fw';
 export function buildDropletTags(projectId: string, firewallTag: string = DEFAULT_FIREWALL_TAG): string[] {
     return Array.from(new Set(['demo-launcher', projectId, firewallTag]));
 }
+
+const DEFAULT_MAX_DEMO_TIME_SECONDS = 60 * 60; // 1 hour
+
+/**
+ * Resolve max demo lifetime in ms from env.MAX_DEMO_TIME_SECONDS (falls back to default if unset/invalid).
+ * Example: getMaxDemoTimeMs(env) // "1800" -> 1800000
+ */
+export function getMaxDemoTimeMs(env: Env): number {
+    const seconds = Number(env.MAX_DEMO_TIME_SECONDS);
+    return (Number.isFinite(seconds) && seconds > 0 ? seconds : DEFAULT_MAX_DEMO_TIME_SECONDS) * 1000;
+}

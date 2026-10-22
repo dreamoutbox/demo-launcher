@@ -18,7 +18,7 @@
 
 - [x] custom machine types in projects.json
 
-- [ ] convert `MAX_DEMO_TIME` to ENV var
+- [x] convert `MAX_DEMO_TIME` to ENV `MAX_DEMO_TIME_SECONDS`
 
 - [ ] add ping health check
 

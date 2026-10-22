@@ -1,4 +1,13 @@
-const MAX_DEMO_TIME_LABEL = '1 hour';
+let maxDemoTimeLabel = '-';
+
+/**
+ * Format seconds as a short label. Example: formatSeconds(1800) -> '30 minutes'
+ */
+function formatSeconds(seconds) {
+	if (seconds % 3600 === 0) return `${seconds / 3600} hour(s)`;
+	if (seconds % 60 === 0) return `${seconds / 60} minutes`;
+	return `${seconds} seconds`;
+}
 let pollTimer = null;
 let activeProjectId = null;
 let cachedProjects = [];
@@ -68,6 +77,7 @@ async function loadProjectList() {
 		const res = await fetch('/api/projects');
 		const data = await res.json();
 		cachedProjects = data.projects || [];
+		if (typeof data.maxDemoTimeSeconds === 'number') maxDemoTimeLabel = formatSeconds(data.maxDemoTimeSeconds);
 		const statuses = data.statuses || [];
 
 		if (cachedProjects.length === 0) {
@@ -123,7 +133,7 @@ async function handleViewClick(project) {
 	detailStatus.textContent = 'CHECKING...';
 	detailIp.textContent = 'Fetching droplet IP...';
 	detailUptime.textContent = '-';
-	detailMaxTime.textContent = MAX_DEMO_TIME_LABEL;
+	detailMaxTime.textContent = maxDemoTimeLabel;
 	openIpContainer.classList.add('hidden');
 
 	fetchProjectReadme(project.repoUrl);
@@ -157,7 +167,7 @@ async function handleLaunchClick(project) {
 	detailStatus.textContent = 'LAUNCHING...';
 	detailIp.textContent = 'Fetching droplet IP (provisioning droplet)...';
 	detailUptime.textContent = '0s';
-	detailMaxTime.textContent = MAX_DEMO_TIME_LABEL;
+	detailMaxTime.textContent = maxDemoTimeLabel;
 	openIpContainer.classList.add('hidden');
 
 	// Fetch GitHub README in parallel

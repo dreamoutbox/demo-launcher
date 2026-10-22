@@ -1,20 +1,20 @@
 import projects from './projects.json';
 import { getDigitalOceanService } from './digitalocean';
-import { formatUptime, isDevelopment } from './helper';
+import { formatUptime, getMaxDemoTimeMs, isDevelopment } from './helper';
 import { ActionStatus, ActionType, Env, QueueMessage } from './types';
 import { verifyTurnstileToken, TurnstileStatus } from './turnstile';
 import { extractClientInfo, getActionLogs, isAdminAuthorized, recordActionLog } from './action-log';
 import { evaluateLaunchSchedule } from './time-range';
 export { ProjectLauncher } from './launcher';
 
-const MAX_DEMO_TIME = 60 * 60 * 1000; // 1 hour in milliseconds
+
 
 /**
  * Reusable cleanup function for both Scheduled CRON and manual testing
  */
 export async function cleanupExpiredDemos(
 	env: Env,
-	maxDemoTimeMs: number = MAX_DEMO_TIME,
+	maxDemoTimeMs: number = getMaxDemoTimeMs(env),
 	requestUrl?: string,
 ): Promise<{ cleanedUp: string[]; maxDemoTimeMs: number }> {
 	console.log(`[CRON] Checking for expired demo droplets (maxDemoTime: ${maxDemoTimeMs}ms)...`);
@@ -98,6 +98,7 @@ export default {
 			return Response.json({
 				projects,
 				statuses: statusesWithUptime,
+				maxDemoTimeSeconds: getMaxDemoTimeMs(env) / 1000,
 				turnstileSiteKey: env.TURNSTILE_SITE_KEY || '1x00000000000000000000AA',
 			});
 		}
@@ -238,7 +239,7 @@ export default {
 			const secondsParam = searchParams.get('maxDemoTimeSeconds');
 			const msParam = searchParams.get('maxDemoTimeMs');
 
-			let customMaxTimeMs = MAX_DEMO_TIME;
+			let customMaxTimeMs = getMaxDemoTimeMs(env);
 			if (secondsParam !== null && !Number.isNaN(Number(secondsParam))) {
 				customMaxTimeMs = Number(secondsParam) * 1000;
 			} else if (msParam !== null && !Number.isNaN(Number(msParam))) {
@@ -286,6 +287,6 @@ export default {
 	},
 
 	async scheduled(controller, env, ctx) {
-		await cleanupExpiredDemos(env, MAX_DEMO_TIME);
+		await cleanupExpiredDemos(env);
 	},
 } satisfies ExportedHandler<Env, QueueMessage>;
