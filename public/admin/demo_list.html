@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Demo List - Demo Launcher Admin</title>
+  <link rel="stylesheet" href="/main.css" />
+</head>
+
+<body>
+  <div class="container container-wide">
+    <nav class="admin-nav">
+      <a href="/">Demo Launcher</a>
+      <a href="/admin/demo_list.html">Demo List</a>
+      <a href="/admin/action_log.html">Action Logs</a>
+    </nav>
+
+    <h1>Demo List</h1>
+
+    <!-- Admin Key Bar -->
+    <div class="status-box admin-key-bar">
+      <div>
+        <strong>Admin Authentication:</strong>
+      </div>
+      <div class="admin-key-controls">
+        <input type="password" id="admin-key-input" placeholder="Admin Key..." autocomplete="off" />
+        <button type="button" id="toggle-key-visibility-btn" class="btn-sm">Show</button>
+        <button type="button" id="save-key-btn" class="btn-sm">Set</button>
+      </div>
+    </div>
+
+    <div class="table-toolbar">
+      <span id="demo-list-status" class="toolbar-message">Loading demos...</span>
+      <button type="button" id="refresh-btn">Refresh</button>
+    </div>
+
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Project</th>
+            <th>Status</th>
+            <th>Droplet IP</th>
+            <th>Uptime</th>
+            <th>Repository</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="demo-tbody">
+          <tr>
+            <td colspan="6">Loading demo projects...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="/admin/demo_list.js"></script>
+</body>
+
+</html>

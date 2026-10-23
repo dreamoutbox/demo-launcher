@@ -9,7 +9,10 @@ function formatSeconds(seconds) {
 	return `${seconds} seconds`;
 }
 let pollTimer = null;
+let uptimeTimer = null;
 let activeProjectId = null;
+let activeLaunchedAt = null;
+let launchRequestedAt = null;
 let cachedProjects = [];
 
 const listView = document.getElementById('list-view');
@@ -26,7 +29,58 @@ const detailMaxTime = document.getElementById('detail-max-time');
 const openIpContainer = document.getElementById('open-ip-container');
 const openIpBtn = document.getElementById('open-ip-btn');
 const detailReadme = document.getElementById('detail-readme');
+const launchNote = document.getElementById('launch-note');
 const turnstileError = document.getElementById('turnstile-error');
+
+/**
+ * Applies the status color class and text to an element.
+ * Example: setStatus(el, 'RUNNING') -> green "RUNNING" text
+ */
+function setStatus(element, status) {
+	element.textContent = status;
+	element.className = `status-${status.toLowerCase()}`;
+}
+
+function statusClass(status) {
+	return `status-${String(status).toLowerCase()}`;
+}
+
+/**
+ * Formats milliseconds as "1h 12m 5s" / "4s".
+ * Example: formatUptime(65000) -> '1m 5s'
+ */
+function formatUptime(ms) {
+	const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+	const hours = Math.floor(totalSeconds / 3600);
+	const minutes = Math.floor((totalSeconds % 3600) / 60);
+	const seconds = totalSeconds % 60;
+
+	const parts = [];
+	if (hours > 0) parts.push(`${hours}h`);
+	if (minutes > 0 || hours > 0) parts.push(`${minutes}m`);
+	parts.push(`${seconds}s`);
+	return parts.join(' ');
+}
+
+/**
+ * Updates the uptime label locally every second from the last known launched_at.
+ */
+function updateUptime() {
+	detailUptime.textContent = activeLaunchedAt === null ? '-' : formatUptime(Date.now() - activeLaunchedAt);
+}
+
+/**
+ * Schedules the next status poll. Frequent polling is only needed while launching;
+ * running/stopped demos are checked occasionally.
+ * launchRequestedAt covers the short race where the queue consumer has not yet
+ * marked the demo LAUNCHING right after the launch request returns.
+ */
+function scheduleNextPoll(status) {
+	const waitingForLaunch = launchRequestedAt !== null && Date.now() - launchRequestedAt < 30000;
+	const frequent = status === 'LAUNCHING' || (!status && waitingForLaunch) || (status === 'STOPPED' && waitingForLaunch);
+	if (pollTimer) clearTimeout(pollTimer);
+	pollTimer = setTimeout(pollProjectStatus, frequent ? 2000 : 30000);
+}
 
 let currentTurnstileToken = null;
 
@@ -98,7 +152,7 @@ async function loadProjectList() {
 			info.className = 'project-info';
 			info.innerHTML = `
         <strong>${escapeHtml(project.name)}</strong> (${escapeHtml(project.id)})
-        <p>Status: <strong>${escapeHtml(currentStatus)}</strong></p>
+        <p>Status: <strong class="${statusClass(currentStatus)}">${escapeHtml(currentStatus)}</strong></p>
       `;
 
 			const launchBtn = document.createElement('button');
@@ -130,17 +184,24 @@ async function handleViewClick(project) {
 	detailTitle.textContent = project.name;
 	detailRepo.textContent = project.repoUrl;
 	detailRepo.href = project.repoUrl.replace(/\.git$/, '');
-	detailStatus.textContent = 'CHECKING...';
+	setStatus(detailStatus, 'CHECKING');
 	detailIp.textContent = 'Fetching droplet IP...';
 	detailUptime.textContent = '-';
 	detailMaxTime.textContent = maxDemoTimeLabel;
+	launchNote.classList.add('hidden');
 	openIpContainer.classList.add('hidden');
+	activeLaunchedAt = null;
+	launchRequestedAt = null;
 
+	startUptimeTimer();
 	fetchProjectReadme(project.repoUrl);
 
 	await pollProjectStatus();
-	if (pollTimer) clearInterval(pollTimer);
-	pollTimer = setInterval(pollProjectStatus, 2000);
+}
+
+function startUptimeTimer() {
+	if (uptimeTimer) clearInterval(uptimeTimer);
+	uptimeTimer = setInterval(updateUptime, 1000);
 }
 
 // Triggered when user clicks Launch on a project
@@ -164,11 +225,16 @@ async function handleLaunchClick(project) {
 	detailTitle.textContent = project.name;
 	detailRepo.textContent = project.repoUrl;
 	detailRepo.href = project.repoUrl.replace(/\.git$/, '');
-	detailStatus.textContent = 'LAUNCHING...';
-	detailIp.textContent = 'Fetching droplet IP (provisioning droplet)...';
-	detailUptime.textContent = '0s';
+	setStatus(detailStatus, 'LAUNCHING');
+	detailIp.textContent = 'Still launching...';
+	detailUptime.textContent = '-';
 	detailMaxTime.textContent = maxDemoTimeLabel;
+	launchNote.classList.remove('hidden');
 	openIpContainer.classList.add('hidden');
+	activeLaunchedAt = Date.now();
+	launchRequestedAt = Date.now();
+
+	startUptimeTimer();
 
 	// Fetch GitHub README in parallel
 	fetchProjectReadme(project.repoUrl);
@@ -200,46 +266,57 @@ async function handleLaunchClick(project) {
 	// Reset widget so next launch requires fresh verification
 	resetTurnstile();
 
-	// Poll status every 2 seconds to fetch droplet IP and update uptime
+	// Start polling: frequent while launching, slower once running/stopped
 	await pollProjectStatus();
-	if (pollTimer) clearInterval(pollTimer);
-	pollTimer = setInterval(pollProjectStatus, 2000);
 }
 
 // Polls GET /api/projects to update droplet IP and uptime for the active project
 async function pollProjectStatus() {
 	if (!activeProjectId) return;
 
+	const projectId = activeProjectId;
+
 	try {
 		const res = await fetch('/api/projects');
 		const data = await res.json();
+		if (projectId !== activeProjectId) return; // user switched/left while request was in flight
+
 		const statuses = data.statuses || [];
-		const state = statuses.find((s) => s.project_id === activeProjectId);
+		const state = statuses.find((s) => s.project_id === projectId);
 
 		if (!state) {
-			detailStatus.textContent = 'QUEUED (Waiting for queue consumer...)';
-			detailIp.textContent = 'Waiting for droplet creation...';
-			detailUptime.textContent = '-';
+			setStatus(detailStatus, 'LAUNCHING');
+			detailIp.textContent = 'Still launching...';
+			activeLaunchedAt = null;
+			updateUptime();
+			launchNote.classList.remove('hidden');
 			openIpContainer.classList.add('hidden');
+			scheduleNextPoll('LAUNCHING');
 			return;
 		}
 
-		detailStatus.textContent = state.status;
-		detailUptime.textContent = state.uptime_human || '0s';
+		if (state.status !== 'STOPPED') launchRequestedAt = null;
+		setStatus(detailStatus, state.status);
+		activeLaunchedAt = state.launched_at ?? null;
+		updateUptime();
+		launchNote.classList.toggle('hidden', state.status !== 'LAUNCHING');
 
 		if (state.status === 'RUNNING' && state.droplet_ip) {
 			detailIp.textContent = state.droplet_ip;
 			openIpBtn.href = `http://${state.droplet_ip}${state.app_port && state.app_port !== '80' ? `:${state.app_port}` : ''}`;
 			openIpContainer.classList.remove('hidden');
 		} else if (state.status === 'LAUNCHING') {
-			detailIp.textContent = 'Still launching... fetching droplet IP...';
+			detailIp.textContent = 'Still launching...';
 			openIpContainer.classList.add('hidden');
 		} else {
 			detailIp.textContent = 'Not running';
 			openIpContainer.classList.add('hidden');
 		}
+
+		scheduleNextPoll(state.status);
 	} catch (err) {
 		console.error('Failed to poll status:', err);
+		scheduleNextPoll('LAUNCHING');
 	}
 }
 
@@ -301,9 +378,15 @@ async function fetchProjectReadme(repoUrl) {
 // Back button returns to list view and stops polling detail status
 backBtn.addEventListener('click', () => {
 	activeProjectId = null;
+	activeLaunchedAt = null;
+	launchRequestedAt = null;
 	if (pollTimer) {
-		clearInterval(pollTimer);
+		clearTimeout(pollTimer);
 		pollTimer = null;
+	}
+	if (uptimeTimer) {
+		clearInterval(uptimeTimer);
+		uptimeTimer = null;
 	}
 	detailView.classList.add('hidden');
 	listView.classList.remove('hidden');

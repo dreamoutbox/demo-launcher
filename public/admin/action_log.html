@@ -10,17 +10,20 @@
 
 <body>
   <div class="container container-wide">
-    <p><a href="/">&larr; Back to Demo Launcher</a></p>
+    <nav class="admin-nav">
+      <a href="/">Demo Launcher</a>
+      <a href="/admin/demo_list.html">Demo List</a>
+      <a href="/admin/action_log.html">Action Logs</a>
+    </nav>
 
     <h1>Action Logs Audit Trail</h1>
 
     <!-- Admin Key Bar -->
-    <div class="status-box"
-      style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+    <div class="status-box admin-key-bar">
       <div>
         <strong>Admin Authentication:</strong>
       </div>
-      <div style="display: flex; gap: 6px; align-items: center;">
+      <div class="admin-key-controls">
         <input type="password" id="admin-key-input" placeholder="Admin Key..." autocomplete="off" />
         <button type="button" id="toggle-key-visibility-btn" class="btn-sm">Show</button>
         <button type="button" id="save-key-btn" class="btn-sm">Set</button>

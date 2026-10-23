@@ -318,9 +318,12 @@ export default {
 			});
 		}
 
-		// Friendly redirect for /admin/action_log to HTML page
+		// Friendly redirects for admin pages to their HTML files
 		if (pathname === '/admin/action_log' || pathname === '/admin/action_log/') {
 			return Response.redirect(`${url.origin}/admin/action_log.html`, 301);
+		}
+		if (pathname === '/admin/demo_list' || pathname === '/admin/demo_list/') {
+			return Response.redirect(`${url.origin}/admin/demo_list.html`, 301);
 		}
 
 		// Serve static assets if ASSETS binding is available
