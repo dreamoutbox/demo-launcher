@@ -21,10 +21,10 @@
     "id": "rust-playground-server",
     "name": "rust-playground-server",
     "repoUrl": "https://github.com/dreamoutbox/rust-playground-server",
-    "healthcheckPort": "8080",
+    "healthcheckPort": "3000",
     "healthcheckPath": "/",
-    "appPort": "8080",
-    "size": "s-1vcpu-1gb"
+    "appPort": "3000",
+    "size": "s-2vcpu-4gb"
   },
   {
     "id": "demo-launcher-simple-project",
