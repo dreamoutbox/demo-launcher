@@ -1,12 +1,12 @@
 [
   {
-    "id": "demo-launcher-simple-project",
-    "name": "demo-launcher-simple-project",
-    "repoUrl": "https://github.com/dreamoutbox/demo-launcher-simple-project",
-    "healthcheckPort": "80",
-    "healthcheckPath": "/",
-    "appPort": "80",
-    "size": "s-1vcpu-1gb"
+    "id": "java-apartment-management-system",
+    "name": "java-apartment-management-system",
+    "repoUrl": "https://github.com/dreamoutbox/java-apartment-management-system",
+    "healthcheckPort": "8080",
+    "healthcheckPath": "/login",
+    "appPort": "8080",
+    "size": "s-2vcpu-2gb"
   },
   {
     "id": "go-pos",
@@ -15,6 +15,15 @@
     "healthcheckPort": "8080",
     "healthcheckPath": "/",
     "appPort": "8080",
+    "size": "s-1vcpu-1gb"
+  },
+  {
+    "id": "demo-launcher-simple-project",
+    "name": "demo-launcher-simple-project",
+    "repoUrl": "https://github.com/dreamoutbox/demo-launcher-simple-project",
+    "healthcheckPort": "80",
+    "healthcheckPath": "/",
+    "appPort": "80",
     "size": "s-1vcpu-1gb"
   }
 ]

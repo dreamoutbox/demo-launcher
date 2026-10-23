@@ -63,15 +63,24 @@ button:hover,
   margin-top: 14px;
 }
 
-pre#detail-readme {
+#detail-readme {
   border: 1px solid #ccc;
   background-color: #f5f5f5;
   padding: 14px;
   overflow-x: auto;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  font-family: monospace;
-  font-size: 13px;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+}
+
+/* github-markdown-css sets its own bg on .markdown-body; match your container */
+#detail-readme.markdown-body {
+  background-color: #f5f5f5;
+}
+
+/* images in READMEs often exceed container width */
+#detail-readme img {
+  max-width: 100%;
+  height: auto;
 }
 
 .turnstile-wrapper {

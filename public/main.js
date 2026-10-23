@@ -243,34 +243,58 @@ async function pollProjectStatus() {
 	}
 }
 
-// Extracts owner/repo from GitHub URL and fetches raw README.md
+let readmeController;
+
 async function fetchProjectReadme(repoUrl) {
+	readmeController?.abort(); // avoid stale render when switching projects quickly
+	readmeController = new AbortController();
+	const { signal } = readmeController;
+
 	detailReadme.textContent = 'Loading README from GitHub...';
 
-	// Match https://github.com/owner/repo(.git)
-	const match = repoUrl.match(/github\.com\/([^/]+)\/([^/.]+)/i);
+	// Handles dots in repo names (e.g. next.js), strips optional .git
+	const match = repoUrl.match(/github\.com\/([^/]+)\/([^/#?]+)/i);
 	if (!match) {
-		detailReadme.textContent = 'Could not parse GitHub owner/repo from ' + repoUrl;
+		detailReadme.textContent = `Could not parse GitHub owner/repo from ${repoUrl}`;
 		return;
 	}
+	const owner = match[1];
+	const repo = match[2].replace(/\.git$/, '');
 
-	const [, owner, repo] = match;
-
-	// Try GitHub API first (automatically finds default branch README), fallback to raw main/master
 	try {
-		const apiRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/readme`, {
-			headers: { Accept: 'application/vnd.github.v3.raw' },
+		const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/readme`, {
+			headers: { Accept: 'application/vnd.github.raw+json' },
+			signal,
 		});
-
-		if (apiRes.ok) {
-			detailReadme.textContent = await apiRes.text();
+		if (!res.ok) {
+			detailReadme.textContent = `No public README found at https://github.com/${owner}/${repo} (HTTP ${res.status}).`;
 			return;
 		}
 
-		// Fallback if repo is mocked or not found
-		detailReadme.textContent = `No public README.md found at https://github.com/${owner}/${repo}.\n(If this is a mock repo URL in src/projects.json, replace it with a real public GitHub repo URL to preview its README.)`;
+		const markdown = await res.text(); // already UTF-8, no atob needed
+
+		// HEAD resolves to the default branch on both hosts, so no extra branch lookup
+		const rawBase = `https://raw.githubusercontent.com/${owner}/${repo}/HEAD/`;
+		const blobBase = `https://github.com/${owner}/${repo}/blob/HEAD/`;
+
+		const tpl = document.createElement('template');
+		tpl.innerHTML = DOMPurify.sanitize(marked.parse(markdown, { gfm: true }));
+
+		tpl.content.querySelectorAll('img[src]').forEach((img) => {
+			img.src = new URL(img.getAttribute('src'), rawBase).href;
+		});
+		tpl.content.querySelectorAll('a[href]').forEach((a) => {
+			const href = a.getAttribute('href');
+			if (href.startsWith('#')) return;
+			a.href = new URL(href, blobBase).href;
+			a.target = '_blank';
+			a.rel = 'noopener noreferrer';
+		});
+
+		detailReadme.replaceChildren(tpl.content);
 	} catch (err) {
-		detailReadme.textContent = 'Failed to load README: ' + err.message;
+		if (err.name === 'AbortError') return;
+		detailReadme.textContent = `Failed to load README: ${err.message}`;
 	}
 }
 
