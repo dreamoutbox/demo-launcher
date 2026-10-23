@@ -18,6 +18,15 @@
     "size": "s-1vcpu-1gb"
   },
   {
+    "id": "rust-playground-server",
+    "name": "rust-playground-server",
+    "repoUrl": "https://github.com/dreamoutbox/rust-playground-server",
+    "healthcheckPort": "8080",
+    "healthcheckPath": "/",
+    "appPort": "8080",
+    "size": "s-1vcpu-1gb"
+  },
+  {
     "id": "demo-launcher-simple-project",
     "name": "demo-launcher-simple-project",
     "repoUrl": "https://github.com/dreamoutbox/demo-launcher-simple-project",
