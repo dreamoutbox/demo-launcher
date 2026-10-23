@@ -6,7 +6,7 @@
     "healthcheckPort": "8080",
     "healthcheckPath": "/login",
     "appPort": "8080",
-    "size": "s-2vcpu-2gb"
+    "size": "s-1vcpu-1gb"
   },
   {
     "id": "go-pos",
