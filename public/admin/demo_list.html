@@ -10,29 +10,25 @@
 
 <body>
   <div class="container container-wide">
-    <nav class="admin-nav">
-      <a href="/">Demo Launcher</a>
-      <a href="/admin/demo_list.html">Demo List</a>
-      <a href="/admin/action_log.html">Action Logs</a>
-    </nav>
+    <admin-nav></admin-nav>
 
     <h1>Demo List</h1>
-
-    <!-- Admin Key Bar -->
-    <div class="status-box admin-key-bar">
-      <div>
-        <strong>Admin Authentication:</strong>
-      </div>
-      <div class="admin-key-controls">
-        <input type="password" id="admin-key-input" placeholder="Admin Key..." autocomplete="off" />
-        <button type="button" id="toggle-key-visibility-btn" class="btn-sm">Show</button>
-        <button type="button" id="save-key-btn" class="btn-sm">Set</button>
-      </div>
-    </div>
 
     <div class="table-toolbar">
       <span id="demo-list-status" class="toolbar-message">Loading demos...</span>
       <button type="button" id="refresh-btn">Refresh</button>
+    </div>
+
+    <!-- Manual Demo Cleanup Form -->
+    <div class="status-box">
+      <strong>Manual Demo Cleanup:</strong>
+      <form id="cleanup-form" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px;">
+        <label for="cleanup-seconds-input" style="font-size: 13px;">Max Demo Time (seconds):</label>
+        <input type="number" id="cleanup-seconds-input" name="maxDemoTimeSeconds" min="0" placeholder="e.g. 2"
+          style="width: 100px;" value="1" />
+        <button type="submit" id="cleanup-submit-btn">Run Cleanup</button>
+        <span id="cleanup-status-msg" style="font-size: 13px; color: #555;"></span>
+      </form>
     </div>
 
     <div class="table-container">
@@ -41,7 +37,10 @@
           <tr>
             <th>Project</th>
             <th>Status</th>
+            <th>Droplet ID</th>
             <th>Droplet IP</th>
+            <th>Tags</th>
+            <th>Launched At</th>
             <th>Uptime</th>
             <th>Repository</th>
             <th>Action</th>
@@ -49,14 +48,15 @@
         </thead>
         <tbody id="demo-tbody">
           <tr>
-            <td colspan="6">Loading demo projects...</td>
+            <td colspan="9">Loading demo projects...</td>
           </tr>
         </tbody>
       </table>
     </div>
   </div>
 
-  <script src="/admin/demo_list.js"></script>
+  <script type="module" src="/admin/navbar.js"></script>
+  <script type="module" src="/admin/demo_list.js"></script>
 </body>
 
 </html>

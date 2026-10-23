@@ -1,21 +1,14 @@
+import { clearStoredAdminKey, getStoredAdminKey, requireAdminKey } from './auth.js';
+
 /**
  * Action Log Audit Viewer Client Script
  */
-const STORAGE_KEY = 'demo_launcher_admin_key';
 let currentLogs = [];
 let currentPage = 0;
 const pageSize = 50;
 let autoRefreshTimer = null;
 
 // DOM Elements
-const authWall = document.getElementById('auth-wall');
-const mainContent = document.getElementById('main-content');
-const adminKeyInput = document.getElementById('admin-key-input');
-const saveKeyBtn = document.getElementById('save-key-btn');
-const toggleKeyVisibilityBtn = document.getElementById('toggle-key-visibility-btn');
-const authWallKeyInput = document.getElementById('auth-wall-key-input');
-const authWallSubmitBtn = document.getElementById('auth-wall-submit-btn');
-
 const logsTbody = document.getElementById('logs-tbody');
 const refreshBtn = document.getElementById('refresh-btn');
 const refreshIcon = document.getElementById('refresh-icon');
@@ -36,52 +29,6 @@ const metricUniqueIps = document.getElementById('metric-unique-ips');
 const detailsModal = document.getElementById('details-modal');
 const modalCloseBtn = document.getElementById('modal-close-btn');
 const modalJson = document.getElementById('modal-json');
-
-const cleanupForm = document.getElementById('cleanup-form');
-const cleanupSecondsInput = document.getElementById('cleanup-seconds-input');
-const cleanupSubmitBtn = document.getElementById('cleanup-submit-btn');
-const cleanupStatusMsg = document.getElementById('cleanup-status-msg');
-
-/**
- * Resolves the current admin key from URL query or localStorage.
- *
- * @returns The active admin key string or null if unconfigured
- *
- * @example
- * ```ts
- * const key = getStoredAdminKey();
- * ```
- */
-function getStoredAdminKey() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const urlKey = urlParams.get('admin_key') || urlParams.get('key');
-    if (urlKey) {
-        localStorage.setItem(STORAGE_KEY, urlKey);
-        return urlKey;
-    }
-    return localStorage.getItem(STORAGE_KEY) || '';
-}
-
-/**
- * Stores the admin key into localStorage and updates input UI.
- *
- * @param key - The admin key string to store
- *
- * @example
- * ```ts
- * setStoredAdminKey('secret-123');
- * ```
- */
-function setStoredAdminKey(key) {
-    const cleanKey = (key || '').trim();
-    if (cleanKey) {
-        localStorage.setItem(STORAGE_KEY, cleanKey);
-    } else {
-        localStorage.removeItem(STORAGE_KEY);
-    }
-    adminKeyInput.value = cleanKey;
-    authWallKeyInput.value = cleanKey;
-}
 
 /**
  * Formats an epoch millisecond timestamp to local string and relative label.
@@ -135,7 +82,7 @@ function formatTime(ms) {
 async function fetchActionLogs(page = 0) {
     const key = getStoredAdminKey();
     if (!key) {
-        showAuthWall();
+        redirectToLogin();
         return;
     }
 
@@ -150,7 +97,7 @@ async function fetchActionLogs(page = 0) {
         });
 
         if (response.status === 401) {
-            showAuthWall();
+            redirectToLogin();
             return;
         }
 
@@ -159,7 +106,6 @@ async function fetchActionLogs(page = 0) {
         }
 
         const data = await response.json();
-        hideAuthWall();
         currentLogs = data.logs || [];
         currentPage = page;
 
@@ -383,47 +329,15 @@ function escapeHtml(str) {
         .replace(/'/g, '&#39;');
 }
 
-function showAuthWall() {
-    authWall.classList.remove('hidden');
-    mainContent.classList.add('hidden');
-}
-
-function hideAuthWall() {
-    authWall.classList.add('hidden');
-    mainContent.classList.remove('hidden');
+/**
+ * Sends the user to the login page when the admin key is missing or rejected.
+ */
+function redirectToLogin() {
+    clearStoredAdminKey();
+    window.location.replace('/admin/login');
 }
 
 // Event Listeners
-saveKeyBtn.addEventListener('click', () => {
-    setStoredAdminKey(adminKeyInput.value);
-    fetchActionLogs(0);
-});
-
-adminKeyInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-        setStoredAdminKey(adminKeyInput.value);
-        fetchActionLogs(0);
-    }
-});
-
-toggleKeyVisibilityBtn.addEventListener('click', () => {
-    const isPassword = adminKeyInput.type === 'password';
-    adminKeyInput.type = isPassword ? 'text' : 'password';
-    toggleKeyVisibilityBtn.textContent = isPassword ? 'Hide' : 'Show';
-});
-
-authWallSubmitBtn.addEventListener('click', () => {
-    setStoredAdminKey(authWallKeyInput.value);
-    fetchActionLogs(0);
-});
-
-authWallKeyInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-        setStoredAdminKey(authWallKeyInput.value);
-        fetchActionLogs(0);
-    }
-});
-
 refreshBtn.addEventListener('click', () => fetchActionLogs(currentPage));
 
 filterSearch.addEventListener('input', renderTable);
@@ -455,68 +369,7 @@ autoRefreshCheck.addEventListener('change', (e) => {
     }
 });
 
-/**
- * Triggers manual cron cleanup of expired droplets via /api/cron-cleanup.
- *
- * @param maxDemoTimeSeconds - Custom max demo time in seconds string or null
- * @returns Promise resolving when cleanup request completes
- *
- * @example
- * ```ts
- * await triggerManualCleanup('2');
- * ```
- */
-async function triggerManualCleanup(maxDemoTimeSeconds) {
-    if (!cleanupSubmitBtn) return;
-    cleanupSubmitBtn.disabled = true;
-    if (cleanupStatusMsg) {
-        cleanupStatusMsg.textContent = 'Running cleanup...';
-        cleanupStatusMsg.style.color = '#555';
-    }
-
-    try {
-        const params = new URLSearchParams();
-        if (maxDemoTimeSeconds && maxDemoTimeSeconds.trim() !== '') {
-            params.set('maxDemoTimeSeconds', maxDemoTimeSeconds.trim());
-        }
-        const queryString = params.toString();
-        const url = queryString ? `/api/cron-cleanup?${queryString}` : '/api/cron-cleanup';
-
-        const response = await fetch(url);
-        const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(data.error || `HTTP ${response.status}`);
-        }
-
-        const count = data.cleanedUp !== undefined ? data.cleanedUp.length : 0;
-        if (cleanupStatusMsg) {
-            cleanupStatusMsg.textContent = `Cleanup completed: ${count} demo(s) cleaned up.`;
-            cleanupStatusMsg.style.color = '#006600';
-        }
-
-        fetchActionLogs(currentPage);
-    } catch (err) {
-        if (cleanupStatusMsg) {
-            cleanupStatusMsg.textContent = `Cleanup failed: ${err.message}`;
-            cleanupStatusMsg.style.color = '#c00';
-        }
-    } finally {
-        cleanupSubmitBtn.disabled = false;
-    }
+// Initialize only when an admin key is present; requireAdminKey redirects otherwise.
+if (requireAdminKey()) {
+    fetchActionLogs(0);
 }
-
-if (cleanupForm) {
-    cleanupForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        triggerManualCleanup(cleanupSecondsInput ? cleanupSecondsInput.value : '');
-    });
-}
-
-// Initialize state on load
-const initialKey = getStoredAdminKey();
-if (initialKey) {
-    adminKeyInput.value = initialKey;
-    authWallKeyInput.value = initialKey;
-}
-fetchActionLogs(0);

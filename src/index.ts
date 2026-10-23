@@ -342,6 +342,9 @@ export default {
 		}
 
 		// Friendly redirects for admin pages to their HTML files
+		if (pathname === '/admin/login' || pathname === '/admin/login/') {
+			return Response.redirect(`${url.origin}/admin/login.html`, 301);
+		}
 		if (pathname === '/admin/action_log' || pathname === '/admin/action_log/') {
 			return Response.redirect(`${url.origin}/admin/action_log.html`, 301);
 		}

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Login - Demo Launcher</title>
+  <link rel="stylesheet" href="/main.css" />
+</head>
+
+<body>
+  <div class="container">
+    <h1>Admin Login</h1>
+
+    <div class="status-box">
+      <p>Enter your <code>ADMIN_KEY</code> to access the admin pages.</p>
+      <form id="login-form" class="login-form">
+        <div class="admin-key-controls">
+          <input type="password" id="admin-key-input" placeholder="Admin Key..." autocomplete="current-password"
+            autofocus />
+          <button type="button" id="toggle-key-visibility-btn" class="btn-sm">Show</button>
+          <button type="submit" id="login-btn">Login</button>
+        </div>
+        <span id="login-status" class="toolbar-message"></span>
+      </form>
+    </div>
+  </div>
+
+  <script type="module" src="/admin/login.js"></script>
+</body>
+
+</html>

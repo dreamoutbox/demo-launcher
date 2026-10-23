@@ -1,46 +1,20 @@
+import { getStoredAdminKey, requireAdminKey } from './auth.js';
+
 /**
  * Admin Demo List client script.
  * Lists every configured project with its live demo status and allows force-stopping instances.
  */
-const STORAGE_KEY = 'demo_launcher_admin_key';
 let projects = [];
 let statuses = [];
 let stoppingProjectId = null;
 
-const adminKeyInput = document.getElementById('admin-key-input');
-const saveKeyBtn = document.getElementById('save-key-btn');
-const toggleKeyVisibilityBtn = document.getElementById('toggle-key-visibility-btn');
 const refreshBtn = document.getElementById('refresh-btn');
 const demoTbody = document.getElementById('demo-tbody');
 const listStatus = document.getElementById('demo-list-status');
-
-/**
- * Resolves the current admin key from URL query or localStorage.
- * Example: getStoredAdminKey() -> 'secret-123'
- */
-function getStoredAdminKey() {
-	const urlParams = new URLSearchParams(window.location.search);
-	const urlKey = urlParams.get('admin_key') || urlParams.get('key');
-	if (urlKey) {
-		localStorage.setItem(STORAGE_KEY, urlKey);
-		return urlKey;
-	}
-	return localStorage.getItem(STORAGE_KEY) || '';
-}
-
-/**
- * Stores the admin key into localStorage and updates the input field.
- * Example: setStoredAdminKey('secret-123')
- */
-function setStoredAdminKey(key) {
-	const cleanKey = (key || '').trim();
-	if (cleanKey) {
-		localStorage.setItem(STORAGE_KEY, cleanKey);
-	} else {
-		localStorage.removeItem(STORAGE_KEY);
-	}
-	adminKeyInput.value = cleanKey;
-}
+const cleanupForm = document.getElementById('cleanup-form');
+const cleanupSecondsInput = document.getElementById('cleanup-seconds-input');
+const cleanupSubmitBtn = document.getElementById('cleanup-submit-btn');
+const cleanupStatusMsg = document.getElementById('cleanup-status-msg');
 
 /**
  * Formats milliseconds as "1h 12m 5s" / "4s".
@@ -59,6 +33,15 @@ function formatUptime(ms) {
 	return parts.join(' ');
 }
 
+/**
+ * Formats an epoch millisecond timestamp as a local date and time.
+ * Example: formatDateTime(1771579200000) -> 'Feb 20, 2026, 12:00:00 PM'
+ */
+function formatDateTime(ms) {
+	if (!ms) return '-';
+	return new Date(ms).toLocaleString();
+}
+
 function escapeHtml(str) {
 	if (!str) return '';
 	return String(str)
@@ -67,6 +50,24 @@ function escapeHtml(str) {
 		.replace(/>/g, '&gt;')
 		.replace(/"/g, '&quot;')
 		.replace(/'/g, '&#39;');
+}
+
+/**
+ * Renders a droplet's JSON-encoded tag list as labeled pills.
+ * Example: renderTags('["demo-launcher","go-pos"]')
+ */
+function renderTags(tags) {
+	if (!tags) return '-';
+
+	let parsed = [];
+	try {
+		parsed = Array.isArray(tags) ? tags : JSON.parse(tags);
+	} catch {
+		return escapeHtml(tags);
+	}
+
+	if (!Array.isArray(parsed) || parsed.length === 0) return '-';
+	return parsed.map((tag) => `<span class="code-pill">${escapeHtml(tag)}</span>`).join(' ');
 }
 
 function statusClass(status) {
@@ -95,7 +96,7 @@ async function loadDemos() {
 		showMessage(`Loaded ${projects.length} project(s).`);
 	} catch (err) {
 		console.error('Failed to load demos:', err);
-		demoTbody.innerHTML = `<tr><td colspan="6" class="empty-state" style="color: #c00;">Failed to load demo projects: ${escapeHtml(err.message)}</td></tr>`;
+		demoTbody.innerHTML = `<tr><td colspan="9" class="empty-state" style="color: #c00;">Failed to load demo projects: ${escapeHtml(err.message)}</td></tr>`;
 		showMessage('Failed to load demos.', '#c00');
 	} finally {
 		refreshBtn.disabled = false;
@@ -108,7 +109,7 @@ async function loadDemos() {
  */
 function renderTable() {
 	if (projects.length === 0) {
-		demoTbody.innerHTML = '<tr><td colspan="6">No projects configured.</td></tr>';
+		demoTbody.innerHTML = '<tr><td colspan="9">No projects configured.</td></tr>';
 		return;
 	}
 
@@ -117,7 +118,8 @@ function renderTable() {
 			const state = statuses.find((s) => s.project_id === project.id);
 			const status = state ? state.status : 'STOPPED';
 			const launchedAt = state && state.launched_at ? state.launched_at : null;
-			const dropletIp = state && state.droplet_ip ? state.droplet_ip : '-';
+			const dropletId = state && state.droplet_id ? state.droplet_id : null;
+			const dropletIp = state && state.droplet_ip ? state.droplet_ip : null;
 			const isStopped = status === 'STOPPED' || status === 'FAILED';
 			const isStopping = stoppingProjectId === project.id;
 
@@ -132,7 +134,10 @@ function renderTable() {
 						<div class="toolbar-message">${escapeHtml(project.id)}</div>
 					</td>
 					<td><strong class="${statusClass(status)}">${escapeHtml(status)}</strong></td>
-					<td>${escapeHtml(dropletIp)}</td>
+					<td>${dropletId ?? '-'}</td>
+					<td>${escapeHtml(dropletIp ?? '-')}</td>
+					<td>${renderTags(state?.tags)}</td>
+					<td>${formatDateTime(launchedAt)}</td>
 					<td data-launched-at="${launchedAt ?? ''}">${launchedAt ? formatUptime(Date.now() - launchedAt) : '-'}</td>
 					<td><a href="${escapeHtml(project.repoUrl)}" target="_blank" rel="noopener noreferrer">Repository</a></td>
 					<td>${stopButton}</td>
@@ -160,8 +165,7 @@ function updateUptimes() {
 async function stopDemo(projectId) {
 	const key = getStoredAdminKey();
 	if (!key) {
-		showMessage('Enter and set your Admin Key before stopping a demo.', '#c00');
-		adminKeyInput.focus();
+		window.location.replace('/admin/login');
 		return;
 	}
 
@@ -183,7 +187,7 @@ async function stopDemo(projectId) {
 		const data = await res.json().catch(() => ({}));
 
 		if (res.status === 401) {
-			showMessage('Unauthorized: set a valid Admin Key.', '#c00');
+			window.location.replace('/admin/login');
 			return;
 		}
 		if (!res.ok) {
@@ -200,23 +204,46 @@ async function stopDemo(projectId) {
 	}
 }
 
-saveKeyBtn.addEventListener('click', () => {
-	setStoredAdminKey(adminKeyInput.value);
-	showMessage('Admin key saved.', '#067d06');
-});
+/**
+ * Triggers manual cron cleanup of expired droplets via /api/cron-cleanup.
+ *
+ * @param maxDemoTimeSeconds - Custom max demo time in seconds string or null
+ *
+ * @example
+ * await triggerManualCleanup('2');
+ */
+async function triggerManualCleanup(maxDemoTimeSeconds) {
+	cleanupSubmitBtn.disabled = true;
+	cleanupStatusMsg.textContent = 'Running cleanup...';
+	cleanupStatusMsg.style.color = '#555';
 
-adminKeyInput.addEventListener('keydown', (e) => {
-	if (e.key === 'Enter') {
-		setStoredAdminKey(adminKeyInput.value);
-		showMessage('Admin key saved.', '#067d06');
+	try {
+		const params = new URLSearchParams();
+		if (maxDemoTimeSeconds && maxDemoTimeSeconds.trim() !== '') {
+			params.set('maxDemoTimeSeconds', maxDemoTimeSeconds.trim());
+		}
+		const queryString = params.toString();
+		const url = queryString ? `/api/cron-cleanup?${queryString}` : '/api/cron-cleanup';
+
+		const response = await fetch(url);
+		const data = await response.json();
+
+		if (!response.ok) {
+			throw new Error(data.error || `HTTP ${response.status}`);
+		}
+
+		const count = data.cleanedUp !== undefined ? data.cleanedUp.length : 0;
+		cleanupStatusMsg.textContent = `Cleanup completed: ${count} demo(s) cleaned up.`;
+		cleanupStatusMsg.style.color = '#006600';
+
+		await loadDemos();
+	} catch (err) {
+		cleanupStatusMsg.textContent = `Cleanup failed: ${err.message}`;
+		cleanupStatusMsg.style.color = '#c00';
+	} finally {
+		cleanupSubmitBtn.disabled = false;
 	}
-});
-
-toggleKeyVisibilityBtn.addEventListener('click', () => {
-	const isPassword = adminKeyInput.type === 'password';
-	adminKeyInput.type = isPassword ? 'text' : 'password';
-	toggleKeyVisibilityBtn.textContent = isPassword ? 'Hide' : 'Show';
-});
+}
 
 refreshBtn.addEventListener('click', loadDemos);
 
@@ -225,7 +252,13 @@ demoTbody.addEventListener('click', (e) => {
 	if (button) stopDemo(button.dataset.projectId);
 });
 
-// Initialize
-adminKeyInput.value = getStoredAdminKey();
-loadDemos();
-setInterval(updateUptimes, 1000);
+cleanupForm.addEventListener('submit', (e) => {
+	e.preventDefault();
+	triggerManualCleanup(cleanupSecondsInput.value);
+});
+
+// Initialize only when an admin key is present; requireAdminKey redirects otherwise.
+if (requireAdminKey()) {
+	loadDemos();
+	setInterval(updateUptimes, 1000);
+}
