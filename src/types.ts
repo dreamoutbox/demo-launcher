@@ -8,6 +8,7 @@ export interface DropletInfo {
 export interface IDigitalOceanService {
 	createDroplet(projectId: string, repoUrl: string, size?: string): Promise<DropletInfo>;
 	deleteDroplet(dropletId: number): Promise<void>;
+	listDroplets(): Promise<DropletInfo[]>;
 }
 
 export interface QueueMessage {

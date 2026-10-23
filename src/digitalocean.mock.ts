@@ -32,6 +32,21 @@ export class DigitalOceanMockService implements IDigitalOceanService {
 		};
 	}
 
+	/**
+	 * Mock droplet listing. The mock service is stateless per request, so nothing is returned.
+	 *
+	 * @returns Empty droplet list
+	 *
+	 * @example
+	 * ```ts
+	 * const droplets = await service.listDroplets();
+	 * ```
+	 */
+	async listDroplets(): Promise<DropletInfo[]> {
+		console.log('[DO-MOCK] Listing droplets (mock) -> []');
+		return [];
+	}
+
 	async deleteDroplet(dropletId: number): Promise<void> {
 		console.log(`[DO-MOCK] Deleting droplet ID: ${dropletId}...`);
 		await new Promise((resolve) => setTimeout(resolve, 500));

@@ -274,6 +274,21 @@ export default {
 			return Response.json({ message: `Force stopped ${projectId}`, projectId, dropletId: row?.droplet_id ?? null });
 		}
 
+		// GET /api/admin/droplets -> List all droplets in the DigitalOcean account (Admin Key protected)
+		if (pathname === '/api/admin/droplets' && req.method === 'GET') {
+			if (!isAdminAuthorized(req, env)) {
+				return Response.json({ error: 'Unauthorized: invalid or missing admin key' }, { status: 401 });
+			}
+
+			try {
+				const droplets = await getDigitalOceanService(env, req.url).listDroplets();
+				return Response.json({ droplets, count: droplets.length });
+			} catch (err) {
+				const message = err instanceof Error ? err.message : String(err);
+				return Response.json({ error: `Failed to list droplets: ${message}` }, { status: 500 });
+			}
+		}
+
 		// GET /api/admin/action-logs or /api/action-logs -> Retrieve audit logs (Admin Key protected)
 		if ((pathname === '/api/admin/action-logs' || pathname === '/api/action-logs') && req.method === 'GET') {
 			if (!isAdminAuthorized(req, env)) {

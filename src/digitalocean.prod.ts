@@ -447,6 +447,58 @@ export class DigitalOceanProdService implements IDigitalOceanService {
 		throw new Error(`Timed out waiting for public IPv4 on Droplet ${dropletId}`);
 	}
 
+	/**
+	 * Lists every droplet in the DigitalOcean account, following pagination.
+	 *
+	 * @returns All droplets with id, public IPv4 (or empty string when unassigned), status, and tags
+	 *
+	 * @example
+	 * ```ts
+	 * const droplets = await service.listDroplets();
+	 * ```
+	 */
+	async listDroplets(): Promise<DropletInfo[]> {
+		const droplets: DropletInfo[] = [];
+		let page = 1;
+
+		while (true) {
+			const res = await fetch(`${this.baseUrl}/droplets?per_page=200&page=${page}`, {
+				method: 'GET',
+				headers: this.headers,
+			});
+
+			if (!res.ok) {
+				const errText = await res.text();
+				throw new Error(`DigitalOcean listDroplets failed (${res.status}): ${errText}`);
+			}
+
+			const data = (await res.json()) as {
+				droplets: Array<{
+					id: number;
+					status: string;
+					tags: string[];
+					networks: { v4: Array<{ ip_address: string; type: string }> };
+				}>;
+				links?: { pages?: { next?: string } };
+			};
+
+			for (const droplet of data.droplets) {
+				const publicV4 = droplet.networks.v4.find((n) => n.type === 'public');
+				droplets.push({
+					id: droplet.id,
+					ip: publicV4?.ip_address ?? '',
+					status: droplet.status,
+					tags: droplet.tags ?? [],
+				});
+			}
+
+			if (!data.links?.pages?.next) {
+				return droplets;
+			}
+			page++;
+		}
+	}
+
 	async deleteDroplet(dropletId: number): Promise<void> {
 		const res = await fetch(`${this.baseUrl}/droplets/${dropletId}`, {
 			method: 'DELETE',
