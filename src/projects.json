@@ -24,7 +24,7 @@
     "healthcheckPort": "3000",
     "healthcheckPath": "/",
     "appPort": "3000",
-    "size": "s-2vcpu-4gb"
+    "size": "s-1vcpu-1gb"
   },
   {
     "id": "demo-launcher-simple-project",

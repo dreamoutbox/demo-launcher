@@ -4,6 +4,16 @@ Demo Launcher is a Cloudflare Worker application for showcasing projects by star
 
 Each demo is stopped after one hour. A scheduled Worker runs every five minutes, so cleanup can happen up to about five minutes after that limit.
 
+## Demo Images
+
+![index page](readme-images/index.png)
+
+![demo instance page](readme-images/demo-instance.png)
+
+![admin demo list page](readme-images/admin-demo-list.png)
+
+![admin action log page](readme-images/admin-action-logs.png)
+
 ## Requirements
 
 - Node.js and pnpm

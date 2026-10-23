@@ -24,6 +24,8 @@
 
 - [x] add force stop api route, delete droplet. when demo instance stuck at launching.
 
+- [x] fix stuck at `LAUNCHING` status if worker reload in dev.
+
 - [ ] make projects.json as secret. use `npx wrangler secret put PROJECTS_JSON < projects.json`
 
 - [ ] add shell script for update `PROJECTS_JSON` secret.
@@ -38,4 +40,4 @@
 
 - [x] add manual cron cleanup button to admin page.
 
-- [ ] add markdown render to Project README view.
+- [x] add proper markdown render to Project README view.
