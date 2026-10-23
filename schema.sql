@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS project_demos (
     droplet_id INTEGER,
     droplet_ip TEXT,
     tags TEXT,            -- JSON array of DigitalOcean tags
-    launched_at INTEGER   -- Unix timestamp in milliseconds
+    launched_at INTEGER,  -- Unix timestamp in milliseconds
+    attempt_id TEXT       -- UUID for the current launch attempt
 );
 
 CREATE TABLE IF NOT EXISTS action_logs (

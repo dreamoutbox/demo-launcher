@@ -97,21 +97,47 @@ export const DEFAULT_FIREWALL_NAME = 'demo-launcher-fw';
 export const DEFAULT_FIREWALL_TAG = 'demo-launcher-fw';
 
 /**
+ * Builds the tag that identifies a single launch attempt.
+ *
+ * @param attemptId - UUID persisted in `project_demos.attempt_id`
+ * @returns Tag applied to the droplet created for that attempt
+ *
+ * @example
+ * ```ts
+ * buildLaunchTag('5d1c...'); // 'launch-5d1c...'
+ * ```
+ */
+export function buildLaunchTag(attemptId: string): string {
+    return `launch-${attemptId}`;
+}
+
+/**
  * Builds a deduplicated list of tags to be assigned to a demo droplet.
  * Always includes 'demo-launcher', the given projectId, and the configured firewall tag.
+ * When an attemptId is supplied, adds a `launch-<attemptId>` tag so an interrupted
+ * launch can find its droplet again.
  *
  * @param projectId - Unique identifier for the demo project
  * @param firewallTag - Optional firewall tag, defaults to DEFAULT_FIREWALL_TAG ('demo-launcher-fw')
+ * @param attemptId - Optional launch attempt identifier
  * @returns Array of unique tag strings
  *
  * @example
  * ```ts
- * const tags = buildDropletTags('shop-demo', 'custom-fw-tag');
- * // ['demo-launcher', 'shop-demo', 'custom-fw-tag']
+ * const tags = buildDropletTags('shop-demo', 'custom-fw-tag', 'abc123');
+ * // ['demo-launcher', 'shop-demo', 'custom-fw-tag', 'launch-abc123']
  * ```
  */
-export function buildDropletTags(projectId: string, firewallTag: string = DEFAULT_FIREWALL_TAG): string[] {
-    return Array.from(new Set(['demo-launcher', projectId, firewallTag]));
+export function buildDropletTags(
+    projectId: string,
+    firewallTag: string = DEFAULT_FIREWALL_TAG,
+    attemptId?: string,
+): string[] {
+    const tags = ['demo-launcher', projectId, firewallTag];
+    if (attemptId) {
+        tags.push(buildLaunchTag(attemptId));
+    }
+    return Array.from(new Set(tags));
 }
 
 const DEFAULT_MAX_DEMO_TIME_SECONDS = 60 * 60; // 1 hour

@@ -22,6 +22,7 @@ fail() {
 # 1. Initialize local D1 schema and reset state for a clean test run
 log_step "1. Initializing local D1 database schema..."
 npx wrangler d1 execute mydb --local --file=./schema.sql
+./dev-migrate.sh --local
 npx wrangler d1 execute mydb --local --command="DELETE FROM project_demos;"
 
 # 2. Start wrangler dev in background and ensure it exits when the script exits

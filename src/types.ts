@@ -1,18 +1,44 @@
 export interface DropletInfo {
 	id: number;
+	/** Public IPv4 address, or an empty string until DigitalOcean assigns one. */
 	ip: string;
 	status: string;
 	tags: string[];
 }
 
 export interface IDigitalOceanService {
-	createDroplet(projectId: string, repoUrl: string, size?: string): Promise<DropletInfo>;
+	/**
+	 * Creates a droplet and returns as soon as DigitalOcean accepts the request.
+	 * The returned `ip` is empty until the droplet is polled with `getDroplet`.
+	 */
+	createDroplet(projectId: string, repoUrl: string, size?: string, attemptId?: string): Promise<DropletInfo>;
+	getDroplet(dropletId: number): Promise<DropletInfo | null>;
 	deleteDroplet(dropletId: number): Promise<void>;
 	listDroplets(): Promise<DropletInfo[]>;
 }
 
+/** Project demo lifecycle states stored in `project_demos.status`. */
+export enum DemoStatus {
+	STOPPED = 'STOPPED',
+	LAUNCHING = 'LAUNCHING',
+	RUNNING = 'RUNNING',
+	FAILED = 'FAILED',
+}
+
+/** Queue-driven launch phases. */
+export enum LaunchPhase {
+	CREATE = 'CREATE',
+	POLL_HEALTH = 'POLL_HEALTH',
+}
+
 export interface QueueMessage {
 	projectId: string;
+	/**
+	 * Omitted by legacy messages, which are treated as `CREATE`.
+	 * `POLL_HEALTH` messages require `attemptId`.
+	 */
+	phase?: LaunchPhase;
+	attemptId?: string;
 }
 
 export enum ActionType {
@@ -56,5 +82,8 @@ export interface Env {
 	DROPLET_SSH_PRIVATE_KEY?: string;
 	DO_FIREWALL_NAME?: string;
 	DO_FIREWALL_TAG?: string;
+	MAX_DEMO_TIME_SECONDS?: string;
+	LAUNCH_ALLOW_TIME_RANGE?: string;
+	LAUNCH_TIMEZONE?: string;
 	ASSETS?: Fetcher;
 }

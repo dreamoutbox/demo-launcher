@@ -1,7 +1,7 @@
 import projects from './projects.json';
 import { getDigitalOceanService } from './digitalocean';
 import { formatUptime, getMaxDemoTimeMs, isDevelopment } from './helper';
-import { ActionStatus, ActionType, Env, QueueMessage } from './types';
+import { ActionStatus, ActionType, DemoStatus, Env, LaunchPhase, QueueMessage } from './types';
 import { verifyTurnstileToken, TurnstileStatus } from './turnstile';
 import { extractClientInfo, getActionLogs, isAdminAuthorized, recordActionLog } from './action-log';
 import { evaluateLaunchSchedule } from './time-range';
@@ -22,12 +22,19 @@ export { ProjectLauncher } from './launcher';
 async function stopDemo(env: Env, doService: ReturnType<typeof getDigitalOceanService>, projectId: string, dropletId: number | null): Promise<void> {
 	if (dropletId) {
 		await doService.deleteDroplet(dropletId);
+	} else {
+		// An interrupted launch may have created a droplet before saving its id.
+		const droplets = await doService.listDroplets();
+		for (const droplet of droplets.filter((candidate) => candidate.tags.includes(projectId))) {
+			await doService.deleteDroplet(droplet.id);
+		}
 	}
 
 	await env.mydb
 		.prepare(
 			`UPDATE project_demos
-             SET status = 'STOPPED', droplet_id = NULL, droplet_ip = NULL, tags = NULL, launched_at = NULL
+             SET status = 'STOPPED', droplet_id = NULL, droplet_ip = NULL, tags = NULL, launched_at = NULL,
+                 attempt_id = NULL
              WHERE project_id = ?1
 			`,
 		)
@@ -45,7 +52,8 @@ export async function cleanupExpiredDemos(
 ): Promise<{ cleanedUp: string[]; maxDemoTimeMs: number }> {
 	console.log(`[CRON] Checking for expired demo droplets (maxDemoTime: ${maxDemoTimeMs}ms)...`);
 	const doService = getDigitalOceanService(env, requestUrl);
-	const expirationThreshold = Date.now() - maxDemoTimeMs;
+	const now = Date.now();
+	const expirationThreshold = now - maxDemoTimeMs;
 
 	const { results } = await env.mydb
 		.prepare(
@@ -90,7 +98,7 @@ export default {
 			const now = Date.now();
 			const { results } = await env.mydb.prepare('SELECT * FROM project_demos').all<{
 				project_id: string;
-				status: string;
+				status: DemoStatus;
 				droplet_id: number | null;
 				droplet_ip: string | null;
 				tags: string | null;
@@ -98,7 +106,7 @@ export default {
 			}>();
 
 			const statusesWithUptime = results.map((row) => {
-				const isRunning = row.status === 'RUNNING' && row.launched_at !== null;
+				const isRunning = row.status === DemoStatus.RUNNING && row.launched_at !== null;
 				const uptimeMs = isRunning ? Math.max(0, now - row.launched_at!) : null;
 
 				const appPort = projects.find((p) => p.id === row.project_id)?.appPort ?? null;
@@ -205,7 +213,7 @@ export default {
 			}
 
 			// Enqueue launch job
-			await env.DEMO_LAUNCHER_QUEUE.send({ projectId: project.id });
+			await env.DEMO_LAUNCHER_QUEUE.send({ projectId: project.id, phase: LaunchPhase.CREATE });
 
 			await recordActionLog(env, {
 				action: ActionType.LAUNCH_DEMO,
@@ -354,16 +362,24 @@ export default {
 
 	async queue(batch, env, ctx): Promise<void> {
 		for (const message of batch.messages) {
-			const { projectId } = message.body;
-
-			// Route to a per-project Durable Object to serialize and coordinate launches
+			const { projectId, phase, attemptId } = message.body;
 			const stub = env.LAUNCHER.get(env.LAUNCHER.idFromName(projectId));
 
 			try {
-				await stub.launch(projectId);
+				if (phase === LaunchPhase.POLL_HEALTH) {
+					if (!attemptId) {
+						console.error(`[QUEUE] poll message for "${projectId}" is missing attemptId. Dropping.`);
+						message.ack();
+						continue;
+					}
+					await stub.pollAndHealth(projectId, attemptId);
+				} else {
+					// Legacy messages have no phase and are treated as CREATE.
+					await stub.launch(projectId);
+				}
 				message.ack();
 			} catch (err) {
-				console.error(`[QUEUE] launch failed for "${projectId}":`, err);
+				console.error(`[QUEUE] ${phase ?? LaunchPhase.CREATE} failed for "${projectId}":`, err);
 				message.retry();
 			}
 		}

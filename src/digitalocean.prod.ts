@@ -1,4 +1,5 @@
 import { DropletInfo, IDigitalOceanService } from './types';
+import { DigitalOceanApiError } from './digitalocean-error';
 import {
 	buildDropletTags,
 	buildStartupScript,
@@ -218,7 +219,7 @@ export class DigitalOceanProdService implements IDigitalOceanService {
 		}
 
 		const errText = await createRes.text();
-		throw new Error(`DigitalOcean ensureSshKey failed (${createRes.status}): ${errText}`);
+		throw new DigitalOceanApiError(`DigitalOcean ensureSshKey failed (${createRes.status}): ${errText}`, createRes.status);
 	}
 
 	/**
@@ -245,7 +246,7 @@ export class DigitalOceanProdService implements IDigitalOceanService {
 		}
 
 		const errText = await res.text();
-		throw new Error(`DigitalOcean ensureTag failed (${res.status}): ${errText}`);
+		throw new DigitalOceanApiError(`DigitalOcean ensureTag failed (${res.status}): ${errText}`, res.status);
 	}
 
 	/**
@@ -299,7 +300,7 @@ export class DigitalOceanProdService implements IDigitalOceanService {
 					});
 					if (!updateRes.ok) {
 						const errText = await updateRes.text();
-						throw new Error(`DigitalOcean update firewall rules failed (${updateRes.status}): ${errText}`);
+						throw new DigitalOceanApiError(`DigitalOcean update firewall rules failed (${updateRes.status}): ${errText}`, updateRes.status);
 					}
 					this.cachedFirewallId = existing.id;
 					return existing.id;
@@ -312,7 +313,7 @@ export class DigitalOceanProdService implements IDigitalOceanService {
 					});
 					if (!tagRes.ok && tagRes.status !== 422 && tagRes.status !== 409) {
 						const errText = await tagRes.text();
-						throw new Error(`DigitalOcean add tag to firewall failed (${tagRes.status}): ${errText}`);
+						throw new DigitalOceanApiError(`DigitalOcean add tag to firewall failed (${tagRes.status}): ${errText}`, tagRes.status);
 					}
 				}
 				this.cachedFirewallId = existing.id;
@@ -369,10 +370,23 @@ export class DigitalOceanProdService implements IDigitalOceanService {
 		}
 
 		const errText = await createRes.text();
-		throw new Error(`DigitalOcean ensureFirewall failed (${createRes.status}): ${errText}`);
+		throw new DigitalOceanApiError(`DigitalOcean ensureFirewall failed (${createRes.status}): ${errText}`, createRes.status);
 	}
 
-	async createDroplet(projectId: string, repoUrl: string, size?: string): Promise<DropletInfo> {
+	/**
+	 * Creates a droplet and returns as soon as DigitalOcean accepts the request.
+	 * No IP polling happens here; callers should poll with `getDroplet`.
+	 *
+	 * @param projectId - Project identifier used in the droplet name and tags
+	 * @param repoUrl - Git repository cloned by the startup script
+	 * @param size - Optional per-project size override
+	 * @param attemptId - Optional launch attempt identifier added as a tag
+	 * @returns Droplet id, empty IP, status, and tags
+	 *
+	 * @example
+	 * const droplet = await service.createDroplet('go-pos', repoUrl, 's-1vcpu-1gb', attemptId);
+	 */
+	async createDroplet(projectId: string, repoUrl: string, size?: string, attemptId?: string): Promise<DropletInfo> {
 		const userData = buildStartupScript(repoUrl);
 
 		// Ensure firewall exists and is tagged before provisioning droplet
@@ -384,7 +398,7 @@ export class DigitalOceanProdService implements IDigitalOceanService {
 			sshKeys = [keyId];
 		}
 
-		const tags = buildDropletTags(projectId, this.firewallTag);
+		const tags = buildDropletTags(projectId, this.firewallTag, attemptId);
 
 		const dropletPayload: Record<string, unknown> = {
 			name: `demo-${projectId}-${Date.now()}`,
@@ -407,44 +421,60 @@ export class DigitalOceanProdService implements IDigitalOceanService {
 
 		if (!createRes.ok) {
 			const errText = await createRes.text();
-			throw new Error(`DigitalOcean createDroplet failed (${createRes.status}): ${errText}`);
+			throw new DigitalOceanApiError(`DigitalOcean createDroplet failed (${createRes.status}): ${errText}`, createRes.status);
 		}
 
-		const createData = (await createRes.json()) as { droplet: { id: number } };
-		const dropletId = createData.droplet.id;
+		const createData = (await createRes.json()) as { droplet: { id: number; status?: string } };
 
-		// Poll DigitalOcean until the public IPv4 is assigned (up to ~30 seconds)
-		const maxAttempts = 30;
-		for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-			await new Promise((resolve) => setTimeout(resolve, 5000));
+		return {
+			id: createData.droplet.id,
+			ip: '',
+			status: createData.droplet.status ?? 'new',
+			tags,
+		};
+	}
 
-			const getRes = await fetch(`${this.baseUrl}/droplets/${dropletId}`, {
-				method: 'GET',
-				headers: this.headers,
-			});
+	/**
+	 * Fetches a droplet and resolves its public IPv4 address.
+	 *
+	 * @param dropletId - DigitalOcean droplet id
+	 * @returns Droplet info, or null when DigitalOcean reports 404
+	 *
+	 * @example
+	 * const droplet = await service.getDroplet(123456);
+	 */
+	async getDroplet(dropletId: number): Promise<DropletInfo | null> {
+		const res = await fetch(`${this.baseUrl}/droplets/${dropletId}`, {
+			method: 'GET',
+			headers: this.headers,
+		});
 
-			if (getRes.ok) {
-				const getData = (await getRes.json()) as {
-					droplet: {
-						id: number;
-						status: string;
-						networks: { v4: Array<{ ip_address: string; type: string }> };
-					};
-				};
-
-				const publicV4 = getData.droplet.networks.v4.find((n) => n.type === 'public');
-				if (publicV4?.ip_address) {
-					return {
-						id: dropletId,
-						ip: publicV4.ip_address,
-						status: getData.droplet.status,
-						tags,
-					};
-				}
-			}
+		if (res.status === 404) {
+			return null;
 		}
 
-		throw new Error(`Timed out waiting for public IPv4 on Droplet ${dropletId}`);
+		if (!res.ok) {
+			const errText = await res.text();
+			throw new DigitalOceanApiError(`DigitalOcean getDroplet failed (${res.status}): ${errText}`, res.status);
+		}
+
+		const data = (await res.json()) as {
+			droplet: {
+				id: number;
+				status: string;
+				tags?: string[];
+				networks?: { v4?: Array<{ ip_address: string; type: string }> };
+			};
+		};
+
+		const publicV4 = data.droplet.networks?.v4?.find((n) => n.type === 'public');
+
+		return {
+			id: data.droplet.id,
+			ip: publicV4?.ip_address ?? '',
+			status: data.droplet.status,
+			tags: data.droplet.tags ?? [],
+		};
 	}
 
 	/**
@@ -469,7 +499,7 @@ export class DigitalOceanProdService implements IDigitalOceanService {
 
 			if (!res.ok) {
 				const errText = await res.text();
-				throw new Error(`DigitalOcean listDroplets failed (${res.status}): ${errText}`);
+				throw new DigitalOceanApiError(`DigitalOcean listDroplets failed (${res.status}): ${errText}`, res.status);
 			}
 
 			const data = (await res.json()) as {
@@ -508,7 +538,7 @@ export class DigitalOceanProdService implements IDigitalOceanService {
 		// 404 is treated as success in case the droplet was already manually destroyed
 		if (!res.ok && res.status !== 404) {
 			const errText = await res.text();
-			throw new Error(`DigitalOcean deleteDroplet failed (${res.status}): ${errText}`);
+			throw new DigitalOceanApiError(`DigitalOcean deleteDroplet failed (${res.status}): ${errText}`, res.status);
 		}
 	}
 }

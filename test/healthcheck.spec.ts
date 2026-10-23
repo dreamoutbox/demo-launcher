@@ -9,7 +9,7 @@ describe('waitForHealthy', () => {
 	});
 
 	it('returns true on first 2xx and builds the url from ip/port/path', async () => {
-		const fetchMock = vi.fn(async () => new Response('ok', { status: 200 }));
+		const fetchMock = vi.fn(async (_url: string) => new Response('ok', { status: 200 }));
 		vi.stubGlobal('fetch', fetchMock);
 
 		expect(await waitForHealthy('1.2.3.4', '80', '/healthz')).toBe(true);

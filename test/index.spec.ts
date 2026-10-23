@@ -9,8 +9,9 @@ import {
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import worker from '../src/index';
 import projects from '../src/projects.json';
-import { DigitalOceanMockService } from '../src/digitalocean.mock';
+import { DigitalOceanMockService, resetMockDroplets } from '../src/digitalocean.mock';
 import { DigitalOceanProdService, DEFAULT_FIREWALL_INBOUND_RULES, DEFAULT_FIREWALL_OUTBOUND_RULES } from '../src/digitalocean.prod';
+import { DigitalOceanApiError } from '../src/digitalocean-error';
 import { getDigitalOceanService, isRealApiEnabled } from '../src/digitalocean';
 import {
 	buildDropletTags,
@@ -19,7 +20,7 @@ import {
 	DEFAULT_FIREWALL_TAG,
 	normalizePublicKey,
 } from '../src/helper';
-import { ActionLogRecord, ActionStatus, ActionType, Env, QueueMessage } from '../src/types';
+import { ActionLogRecord, ActionStatus, ActionType, DemoStatus, Env, LaunchPhase, QueueMessage } from '../src/types';
 
 // Cast test env to our strict Env interface
 const testEnv = env as unknown as Env;
@@ -38,7 +39,8 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
                     droplet_id INTEGER,
                     droplet_ip TEXT,
                     tags TEXT,
-                    launched_at INTEGER
+                    launched_at INTEGER,
+                    attempt_id TEXT
                 )`,
 			)
 			.run();
@@ -61,6 +63,7 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 			.run();
 
 		vi.restoreAllMocks();
+		resetMockDroplets();
 	});
 
 	it('1a. POST /api/launch should reject when Turnstile token is missing', async () => {
@@ -95,7 +98,7 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 		expect(res.status).toBe(202);
 		const data = (await res.json()) as { projectId: string; message: string };
 		expect(data.projectId).toBe(testProject.id);
-		expect(sendSpy).toHaveBeenCalledWith({ projectId: testProject.id });
+		expect(sendSpy).toHaveBeenCalledWith({ projectId: testProject.id, phase: LaunchPhase.CREATE });
 	});
 
 	it('1c. POST /api/launch in production should verify token with Cloudflare siteverify', async () => {
@@ -146,17 +149,18 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 		expect(resSuccess.status).toBe(202);
 	});
 
-	it('2. Queue consumer should create a mock droplet and save IP + RUNNING status in D1', async () => {
+	it('2. Queue consumer should create a droplet, then poll its IP and mark it RUNNING', async () => {
 		const createDropletSpy = vi.spyOn(DigitalOceanMockService.prototype, 'createDroplet');
+		const sendSpy = vi.spyOn(testEnv.DEMO_LAUNCHER_QUEUE, 'send');
 		// Mock droplet IPs are unroutable; report the app as healthy.
 		vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('ok', { status: 200 }));
 
-		// Build a synthetic queue batch
+		// Phase 1: CREATE
 		const batch = createMessageBatch<QueueMessage>('demo-launch-queue', [
 			{
 				id: 'msg-1',
 				timestamp: new Date(),
-				body: { projectId: testProject.id },
+				body: { projectId: testProject.id, phase: LaunchPhase.CREATE },
 				attempts: 1,
 			},
 		]);
@@ -165,24 +169,65 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 		await worker.queue(batch, testEnv, ctx);
 		const result = await getQueueResult(batch, ctx);
 
-		// Verify queue message was acknowledged
 		expect(result.ackAll).toBe(false);
 		expect(result.explicitAcks).toContain('msg-1');
 		expect(createDropletSpy).toHaveBeenCalledTimes(1);
-		expect(createDropletSpy).toHaveBeenCalledWith(testProject.id, testProject.repoUrl, testProject.size);
+		expect(createDropletSpy).toHaveBeenCalledWith(
+			testProject.id,
+			testProject.repoUrl,
+			testProject.size,
+			expect.any(String),
+		);
 
-		// Verify D1 row was updated to RUNNING with droplet info
-		const row = await testEnv.mydb.prepare('SELECT * FROM project_demos WHERE project_id = ?1').bind(testProject.id).first<{
-			project_id: string;
-			status: string;
-			droplet_id: number;
-			droplet_ip: string;
-			tags: string;
-			launched_at: number;
-		}>();
+		const launchedRow = await testEnv.mydb
+			.prepare('SELECT * FROM project_demos WHERE project_id = ?1')
+			.bind(testProject.id)
+			.first<{
+				status: string;
+				droplet_id: number;
+				droplet_ip: string;
+				tags: string;
+				attempt_id: string;
+			}>();
+
+		expect(launchedRow).not.toBeNull();
+		expect(launchedRow?.status).toBe(DemoStatus.LAUNCHING);
+		expect(launchedRow?.droplet_id).toBeTypeOf('number');
+		expect(launchedRow?.droplet_ip).toBe('');
+		expect(launchedRow?.attempt_id).toBeTypeOf('string');
+		expect(sendSpy).toHaveBeenCalledWith(
+			{ projectId: testProject.id, phase: LaunchPhase.POLL_HEALTH, attemptId: launchedRow!.attempt_id },
+			{ delaySeconds: 10 },
+		);
+
+		// Phase 2: POLL_HEALTH
+		const pollBatch = createMessageBatch<QueueMessage>('demo-launch-queue', [
+			{
+				id: 'msg-2',
+				timestamp: new Date(),
+				body: { projectId: testProject.id, phase: LaunchPhase.POLL_HEALTH, attemptId: launchedRow!.attempt_id },
+				attempts: 1,
+			},
+		]);
+
+		const pollCtx = createExecutionContext();
+		await worker.queue(pollBatch, testEnv, pollCtx);
+		const pollResult = await getQueueResult(pollBatch, pollCtx);
+
+		expect(pollResult.explicitAcks).toContain('msg-2');
+
+		const row = await testEnv.mydb
+			.prepare('SELECT * FROM project_demos WHERE project_id = ?1')
+			.bind(testProject.id)
+			.first<{
+				status: string;
+				droplet_id: number;
+				droplet_ip: string;
+				tags: string;
+			}>();
 
 		expect(row).not.toBeNull();
-		expect(row?.status).toBe('RUNNING');
+		expect(row?.status).toBe(DemoStatus.RUNNING);
 		expect(row?.droplet_id).toBeTypeOf('number');
 		expect(row?.droplet_ip).toMatch(/^192\.0\.2\.\d+$/);
 		expect(row?.tags).toBeTypeOf('string');
@@ -616,13 +661,23 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 			sshPublicKey: targetKey,
 		});
 
-		const droplet = await service.createDroplet('test-ssh-proj', 'https://github.com/example/repo.git');
+		const droplet = await service.createDroplet(
+			'test-ssh-proj',
+			'https://github.com/example/repo.git',
+			undefined,
+			'attempt-123',
+		);
 		expect(droplet.id).toBe(888888);
-		expect(droplet.ip).toBe('203.0.113.88');
-		expect(droplet.tags).toEqual(['demo-launcher', 'test-ssh-proj', 'demo-launcher-fw']);
+		expect(droplet.ip).toBe('');
+		expect(droplet.tags).toEqual(['demo-launcher', 'test-ssh-proj', 'demo-launcher-fw', 'launch-attempt-123']);
 		expect(dropletPostBody).not.toBeNull();
 		expect(dropletPostBody.ssh_keys).toEqual([54321]);
-		expect(dropletPostBody.tags).toEqual(['demo-launcher', 'test-ssh-proj', 'demo-launcher-fw']);
+		expect(dropletPostBody.tags).toEqual([
+			'demo-launcher',
+			'test-ssh-proj',
+			'demo-launcher-fw',
+			'launch-attempt-123',
+		]);
 	}, 15000);
 
 	it('14. ensureFirewall should return existing firewall ID and cache it without creating new firewall', async () => {
@@ -634,7 +689,14 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 				listCalls++;
 				return new Response(
 					JSON.stringify({
-						firewalls: [{ id: 'fw-existing-id', name: 'demo-launcher-fw', tags: ['demo-launcher-fw'] }],
+						firewalls: [
+							{
+								id: 'fw-existing-id',
+								name: 'demo-launcher-fw',
+								tags: ['demo-launcher-fw'],
+								inbound_rules: DEFAULT_FIREWALL_INBOUND_RULES,
+							},
+						],
 					}),
 					{ status: 200 },
 				);
@@ -663,7 +725,14 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 			if (typeof url === 'string' && url.includes('/firewalls?per_page=200') && (!init || init.method === 'GET')) {
 				return new Response(
 					JSON.stringify({
-						firewalls: [{ id: 'fw-missing-tag', name: 'demo-launcher-fw', tags: [] }],
+						firewalls: [
+							{
+								id: 'fw-missing-tag',
+								name: 'demo-launcher-fw',
+								tags: [],
+								inbound_rules: DEFAULT_FIREWALL_INBOUND_RULES,
+							},
+						],
 					}),
 					{ status: 200 },
 				);
@@ -839,8 +908,130 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 		expect(res.status).toBe(202);
 		const data = (await res.json()) as { projectId: string; message: string };
 		expect(data.projectId).toBe(testProject.id);
-		expect(sendSpy).toHaveBeenCalledWith({ projectId: testProject.id });
+		expect(sendSpy).toHaveBeenCalledWith({ projectId: testProject.id, phase: LaunchPhase.CREATE });
 
 		vi.useRealTimers();
+	});
+
+	it('21. redelivered CREATE should adopt an existing tagged droplet instead of creating another', async () => {
+		const doService = new DigitalOceanMockService();
+		const existingDroplet = await doService.createDroplet(
+			testProject.id,
+			testProject.repoUrl,
+			testProject.size,
+			'retry-attempt',
+		);
+
+		const createDropletSpy = vi.spyOn(DigitalOceanMockService.prototype, 'createDroplet');
+		const sendSpy = vi.spyOn(testEnv.DEMO_LAUNCHER_QUEUE, 'send');
+
+		// Simulate a crash after the droplet was created but before its id was saved.
+		await testEnv.mydb
+			.prepare(
+				`INSERT INTO project_demos (project_id, status, launched_at, attempt_id)
+                 VALUES (?1, 'LAUNCHING', ?2, 'retry-attempt')`,
+			)
+			.bind(testProject.id, Date.now() - 60_000)
+			.run();
+
+		const batch = createMessageBatch<QueueMessage>('demo-launch-queue', [
+			{
+				id: 'msg-retry',
+				timestamp: new Date(),
+				body: { projectId: testProject.id, phase: LaunchPhase.CREATE },
+				attempts: 1,
+			},
+		]);
+
+		const ctx = createExecutionContext();
+		await worker.queue(batch, testEnv, ctx);
+		const result = await getQueueResult(batch, ctx);
+
+		expect(result.explicitAcks).toContain('msg-retry');
+		expect(createDropletSpy).not.toHaveBeenCalled();
+		expect(sendSpy).toHaveBeenCalledWith(
+			{ projectId: testProject.id, phase: LaunchPhase.POLL_HEALTH, attemptId: 'retry-attempt' },
+			{ delaySeconds: 10 },
+		);
+
+		const row = await testEnv.mydb
+			.prepare('SELECT * FROM project_demos WHERE project_id = ?1')
+			.bind(testProject.id)
+			.first<{ status: string; droplet_id: number | null; attempt_id: string }>();
+
+		expect(row?.status).toBe(DemoStatus.LAUNCHING);
+		expect(row?.droplet_id).toBe(existingDroplet.id);
+		expect(row?.attempt_id).toBe('retry-attempt');
+	});
+
+	it('22. non-retryable 422 should mark FAILED and ack instead of retrying', async () => {
+		vi.spyOn(DigitalOceanMockService.prototype, 'createDroplet').mockRejectedValue(
+			new DigitalOceanApiError('DigitalOcean createDroplet failed (422): droplet limit', 422),
+		);
+
+		const batch = createMessageBatch<QueueMessage>('demo-launch-queue', [
+			{
+				id: 'msg-422',
+				timestamp: new Date(),
+				body: { projectId: testProject.id, phase: LaunchPhase.CREATE },
+				attempts: 1,
+			},
+		]);
+
+		const ctx = createExecutionContext();
+		await worker.queue(batch, testEnv, ctx);
+		const result = await getQueueResult(batch, ctx);
+
+		expect(result.explicitAcks).toContain('msg-422');
+		expect(result.retryMessages).toEqual([]);
+
+		const row = await testEnv.mydb
+			.prepare('SELECT * FROM project_demos WHERE project_id = ?1')
+			.bind(testProject.id)
+			.first<{ status: string }>();
+
+		expect(row?.status).toBe(DemoStatus.FAILED);
+	});
+
+	it('23. admin stop should delete an orphaned droplet by project tag when droplet_id is missing', async () => {
+		const doService = new DigitalOceanMockService();
+		const orphan = await doService.createDroplet(
+			testProject.id,
+			testProject.repoUrl,
+			testProject.size,
+			'orphan-attempt',
+		);
+
+		await testEnv.mydb
+			.prepare(
+				`INSERT INTO project_demos (project_id, status, launched_at, attempt_id)
+                 VALUES (?1, 'LAUNCHING', ?2, 'orphan-attempt')`,
+			)
+			.bind(testProject.id, Date.now())
+			.run();
+
+		const deleteDropletSpy = vi.spyOn(DigitalOceanMockService.prototype, 'deleteDroplet');
+
+		const req = new Request('http://localhost/api/admin/stop', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', 'x-admin-key': 'test-admin-key' },
+			body: JSON.stringify({ projectId: testProject.id }),
+		});
+
+		const ctx = createExecutionContext();
+		const res = await worker.fetch(req as any, testEnv, ctx);
+		await waitOnExecutionContext(ctx);
+
+		expect(res.status).toBe(200);
+		expect(deleteDropletSpy).toHaveBeenCalledWith(orphan.id);
+
+		const row = await testEnv.mydb
+			.prepare('SELECT * FROM project_demos WHERE project_id = ?1')
+			.bind(testProject.id)
+			.first<{ status: string; droplet_id: number | null; attempt_id: string | null }>();
+
+		expect(row?.status).toBe(DemoStatus.STOPPED);
+		expect(row?.droplet_id).toBeNull();
+		expect(row?.attempt_id).toBeNull();
 	});
 });
