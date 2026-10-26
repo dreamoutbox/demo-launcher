@@ -1,6 +1,6 @@
 import projects from './projects.json';
 import { getDigitalOceanService } from './digitalocean';
-import { formatUptime, getMaxDemoTimeMs, isDevelopment } from './helper';
+import { checkHealth, formatUptime, getMaxDemoTimeMs, isDevelopment } from './helper';
 import { ActionStatus, ActionType, DemoStatus, Env, LaunchPhase, QueueMessage } from './types';
 import { verifyTurnstileToken, TurnstileStatus } from './turnstile';
 import { extractClientInfo, getActionLogs, isAdminAuthorized, recordActionLog } from './action-log';
@@ -126,6 +126,20 @@ export default {
 				maxDemoTimeSeconds: getMaxDemoTimeMs(env) / 1000,
 				turnstileSiteKey: env.TURNSTILE_SITE_KEY || '1x00000000000000000000AA',
 			});
+		}
+
+		// GET /api/health-check -> Client frontend single probe to check if the app on the droplet is ready
+		if (pathname === '/api/health-check' && req.method === 'GET') {
+			const ip = searchParams.get('ip');
+			const port = searchParams.get('port') || '80';
+			const path = searchParams.get('path') || '/';
+
+			if (!ip) {
+				return Response.json({ error: 'Missing ip parameter' }, { status: 400 });
+			}
+
+			const result = await checkHealth(ip, port, path);
+			return Response.json(result);
 		}
 
 		// POST /api/launch -> Triggered when user clicks a project launch button

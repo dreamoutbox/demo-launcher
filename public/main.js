@@ -26,11 +26,56 @@ const detailStatus = document.getElementById('detail-status');
 const detailIp = document.getElementById('detail-ip');
 const detailUptime = document.getElementById('detail-uptime');
 const detailMaxTime = document.getElementById('detail-max-time');
+const detailHealthRow = document.getElementById('detail-health-row');
+const detailHealth = document.getElementById('detail-health');
 const openIpContainer = document.getElementById('open-ip-container');
 const openIpBtn = document.getElementById('open-ip-btn');
 const detailReadme = document.getElementById('detail-readme');
 const launchNote = document.getElementById('launch-note');
 const turnstileError = document.getElementById('turnstile-error');
+
+let healthTimer = null;
+
+function stopHealthCheck() {
+	if (healthTimer) {
+		clearTimeout(healthTimer);
+		healthTimer = null;
+	}
+}
+
+async function probeAppHealth(projectId, ip) {
+	if (!activeProjectId || activeProjectId !== projectId || !ip) {
+		stopHealthCheck();
+		return;
+	}
+
+	const project = cachedProjects.find((p) => p.id === projectId);
+	const port = project?.healthcheckPort || project?.appPort || '80';
+	const path = project?.healthcheckPath || '/';
+
+	try {
+		const res = await fetch(`/api/health-check?ip=${encodeURIComponent(ip)}&port=${encodeURIComponent(port)}&path=${encodeURIComponent(path)}`);
+		const data = await res.json();
+		if (!activeProjectId || activeProjectId !== projectId) return;
+
+		if (data.healthy) {
+			detailHealth.textContent = 'Ready (HTTP 200)';
+			detailHealth.className = 'status-running';
+			launchNote.classList.add('hidden');
+			stopHealthCheck();
+			return;
+		}
+
+		detailHealth.textContent = data.status ? `Starting up (HTTP ${data.status})...` : 'Starting up (booting app)...';
+		detailHealth.className = 'status-launching';
+	} catch {
+		if (!activeProjectId || activeProjectId !== projectId) return;
+		detailHealth.textContent = 'Starting up...';
+		detailHealth.className = 'status-launching';
+	}
+
+	healthTimer = setTimeout(() => probeAppHealth(projectId, ip), 3000);
+}
 
 /**
  * Applies the status color class and text to an element.
@@ -232,6 +277,10 @@ async function handleViewClick(project) {
 	openIpContainer.classList.add('hidden');
 	activeLaunchedAt = null;
 	launchRequestedAt = null;
+	stopHealthCheck();
+	detailHealthRow.classList.add('hidden');
+	detailHealth.textContent = 'Checking...';
+	detailHealth.className = '';
 
 	startUptimeTimer();
 	fetchProjectReadme(project.repoUrl);
@@ -273,6 +322,10 @@ async function handleLaunchClick(project) {
 	openIpContainer.classList.add('hidden');
 	activeLaunchedAt = Date.now();
 	launchRequestedAt = Date.now();
+	stopHealthCheck();
+	detailHealthRow.classList.add('hidden');
+	detailHealth.textContent = 'Checking...';
+	detailHealth.className = '';
 
 	startUptimeTimer();
 
@@ -345,12 +398,20 @@ async function pollProjectStatus() {
 			detailIp.textContent = state.droplet_ip;
 			openIpBtn.href = `http://${state.droplet_ip}${state.app_port && state.app_port !== '80' ? `:${state.app_port}` : ''}`;
 			openIpContainer.classList.remove('hidden');
+			detailHealthRow.classList.remove('hidden');
+			if (!healthTimer && detailHealth.textContent !== 'Ready (HTTP 200)') {
+				probeAppHealth(projectId, state.droplet_ip);
+			}
 		} else if (state.status === 'LAUNCHING') {
 			detailIp.textContent = 'Still launching...';
 			openIpContainer.classList.add('hidden');
+			detailHealthRow.classList.add('hidden');
+			stopHealthCheck();
 		} else {
 			detailIp.textContent = 'Not running';
 			openIpContainer.classList.add('hidden');
+			detailHealthRow.classList.add('hidden');
+			stopHealthCheck();
 		}
 
 		scheduleNextPoll(state.status);
@@ -420,6 +481,7 @@ backBtn.addEventListener('click', () => {
 	activeProjectId = null;
 	activeLaunchedAt = null;
 	launchRequestedAt = null;
+	stopHealthCheck();
 	if (pollTimer) {
 		clearTimeout(pollTimer);
 		pollTimer = null;

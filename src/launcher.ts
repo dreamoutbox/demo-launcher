@@ -1,9 +1,8 @@
 import { DurableObject } from 'cloudflare:workers';
 import projects from './projects.json';
-import { getDigitalOceanService, isDevelopment, isRealApiEnabled } from './digitalocean';
+import { getDigitalOceanService } from './digitalocean';
 import { DemoStatus, DropletInfo, Env, LaunchPhase } from './types';
 import { Mutex } from './mutex';
-import { waitForHealthy } from './healthcheck';
 import { buildLaunchTag } from './helper';
 import { isNonRetryableError } from './digitalocean-error';
 
@@ -205,21 +204,6 @@ export class ProjectLauncher extends DurableObject<Env> {
 				}
 
 				await this.saveDroplet(projectId, attemptId, droplet);
-			}
-
-			// Mock droplets have fake IPs that never respond; skip the health check.
-			if (!isRealApiEnabled(this.env) && isDevelopment(this.env)) {
-				console.log(`[DO] Mock mode: skipping health check for "${projectId}".`);
-			} else {
-				console.log(
-					`[DO] Waiting for "${projectId}" health check at ${ip}:${project.healthcheckPort}${project.healthcheckPath}...`,
-				);
-				const healthy = await waitForHealthy(ip, project.healthcheckPort, project.healthcheckPath);
-				if (!healthy) {
-					await this.markFailed(projectId, attemptId);
-					console.error(`[DO] Health check failed for "${projectId}" at ${ip}.`);
-					return;
-				}
 			}
 
 			if (await this.markRunning(projectId, attemptId, dropletId, ip, tags)) {

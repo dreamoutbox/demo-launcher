@@ -27,9 +27,16 @@ export async function waitForHealthy(
 
 	while (Date.now() < deadline) {
 		try {
-			const res = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+			const res = await fetch(url, {
+				headers: {
+					'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) demo-launcher-healthcheck',
+					'Accept': '*/*',
+				},
+				signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+			});
 			if (res.ok) return true;
-			console.log(`[DO] Health check ${url} returned status ${res.status}; retrying...`);
+			const bodySnippet = (await res.text()).slice(0, 200).replace(/\s+/g, ' ');
+			console.log(`[DO] Health check ${url} returned status ${res.status} (${bodySnippet}); retrying...`);
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
 			console.log(`[DO] Health check ${url} pending: ${msg}; retrying...`);

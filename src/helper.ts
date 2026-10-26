@@ -158,3 +158,47 @@ export function getMaxDemoTimeMs(env: Env): number {
     const seconds = Number(env.MAX_DEMO_TIME_SECONDS);
     return (Number.isFinite(seconds) && seconds > 0 ? seconds : DEFAULT_MAX_DEMO_TIME_SECONDS) * 1000;
 }
+
+/**
+ * Performs a single healthcheck probe against http://<ip>:<port><path>.
+ *
+ * @param ip - Target droplet public IPv4 address
+ * @param port - Application port
+ * @param path - Health endpoint path
+ * @param timeoutMs - Maximum milliseconds to wait for a response (defaults to 4000ms)
+ * @returns Object with healthy boolean flag and HTTP status or error message
+ *
+ * @example
+ * ```ts
+ * const result = await checkHealth('1.2.3.4', '8080', '/login');
+ * if (result.healthy) {
+ *     // Server is ready
+ * }
+ * ```
+ */
+export async function checkHealth(
+    ip: string,
+    port: string,
+    path: string,
+    timeoutMs = 4_000,
+): Promise<{ healthy: boolean; status?: number; error?: string }> {
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    const url = `http://${ip}:${port}${normalizedPath}`;
+
+    try {
+        const res = await fetch(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) demo-launcher-healthcheck',
+                'Accept': '*/*',
+            },
+            signal: AbortSignal.timeout(timeoutMs),
+        });
+        return { healthy: res.ok, status: res.status };
+    } catch (err) {
+        return {
+            healthy: false,
+            error: err instanceof Error ? err.message : String(err),
+        };
+    }
+}
+
