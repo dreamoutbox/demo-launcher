@@ -61,6 +61,14 @@ export const DEFAULT_FIREWALL_INBOUND_RULES = [
 		},
 	},
 	{
+		// S3 seaweedfs
+		protocol: 'tcp',
+		ports: '9000',
+		sources: {
+			addresses: ['0.0.0.0/0', '::/0'],
+		},
+	},
+	{
 		protocol: 'icmp',
 		ports: '0',
 		sources: {
