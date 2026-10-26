@@ -225,7 +225,10 @@ async function triggerManualCleanup(maxDemoTimeSeconds) {
 		const queryString = params.toString();
 		const url = queryString ? `/api/cron-cleanup?${queryString}` : '/api/cron-cleanup';
 
-		const response = await fetch(url);
+		const key = getStoredAdminKey();
+		const response = await fetch(url, {
+			headers: key ? { 'x-admin-key': key } : {},
+		});
 		const data = await response.json();
 
 		if (!response.ok) {

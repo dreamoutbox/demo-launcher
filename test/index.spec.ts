@@ -1057,4 +1057,131 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 		expect(jsonInvalid.healthy).toBe(false);
 		expect(jsonInvalid.error).toContain('Invalid port');
 	});
+
+	it('25. /api/cron-cleanup should require admin key authentication in all environments', async () => {
+		// Unauthorized without admin key
+		const reqNoKey = new Request('http://localhost/api/cron-cleanup?maxDemoTimeSeconds=2', { method: 'GET' });
+		const ctxNoKey = createExecutionContext();
+		const resNoKey = await worker.fetch(reqNoKey as any, testEnv, ctxNoKey);
+		await waitOnExecutionContext(ctxNoKey);
+
+		expect(resNoKey.status).toBe(401);
+		const jsonNoKey = (await resNoKey.json()) as { error: string };
+		expect(jsonNoKey.error).toBe('Unauthorized: invalid or missing admin key');
+
+		// Unauthorized with incorrect admin key
+		const reqWrongKey = new Request('http://localhost/api/cron-cleanup?maxDemoTimeSeconds=2', {
+			method: 'GET',
+			headers: { 'x-admin-key': 'wrong-key' },
+		});
+		const ctxWrongKey = createExecutionContext();
+		const resWrongKey = await worker.fetch(reqWrongKey as any, testEnv, ctxWrongKey);
+		await waitOnExecutionContext(ctxWrongKey);
+
+		expect(resWrongKey.status).toBe(401);
+
+		// Authorized with x-admin-key header
+		const reqHeader = new Request('http://localhost/api/cron-cleanup?maxDemoTimeSeconds=2', {
+			method: 'GET',
+			headers: { 'x-admin-key': testEnv.ADMIN_KEY || 'test-admin-key' },
+		});
+		const ctxHeader = createExecutionContext();
+		const resHeader = await worker.fetch(reqHeader as any, testEnv, ctxHeader);
+		await waitOnExecutionContext(ctxHeader);
+
+		expect(resHeader.status).toBe(200);
+		const jsonHeader = (await resHeader.json()) as { message: string; cleanedUp: string[] };
+		expect(jsonHeader.message).toBe('Manual cron cleanup executed');
+
+		// Authorized with query parameter key
+		const adminKey = testEnv.ADMIN_KEY || 'test-admin-key';
+		const reqQuery = new Request(`http://localhost/api/cron-cleanup?maxDemoTimeSeconds=2&admin_key=${adminKey}`, {
+			method: 'GET',
+		});
+		const ctxQuery = createExecutionContext();
+		const resQuery = await worker.fetch(reqQuery as any, testEnv, ctxQuery);
+		await waitOnExecutionContext(ctxQuery);
+
+		expect(resQuery.status).toBe(200);
+	});
+
+	it('26. /api/admin/verify should return Turnstile site key on GET and validate key and Turnstile token on POST', async () => {
+		// GET returns Turnstile site key
+		const reqGet = new Request('http://localhost/api/admin/verify', { method: 'GET' });
+		const ctxGet = createExecutionContext();
+		const resGet = await worker.fetch(reqGet as any, testEnv, ctxGet);
+		await waitOnExecutionContext(ctxGet);
+
+		expect(resGet.status).toBe(200);
+		const jsonGet = (await resGet.json()) as { turnstileSiteKey: string };
+		expect(jsonGet.turnstileSiteKey).toBeDefined();
+
+		// POST without Turnstile token returns 400
+		const reqNoToken = new Request('http://localhost/api/admin/verify', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ adminKey: testEnv.ADMIN_KEY || 'test-admin-key' }),
+		});
+		const ctxNoToken = createExecutionContext();
+		const resNoToken = await worker.fetch(reqNoToken as any, testEnv, ctxNoToken);
+		await waitOnExecutionContext(ctxNoToken);
+
+		expect(resNoToken.status).toBe(400);
+		const jsonNoToken = (await resNoToken.json()) as { error: string };
+		expect(jsonNoToken.error).toBe('Turnstile token is required');
+
+		// POST in production with invalid Turnstile token returns 403
+		const prodEnv: Env = {
+			...testEnv,
+			ENVIRONMENT: 'production',
+			TURNSTILE_SECRET_KEY: 'test-secret',
+		};
+		vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+			new Response(JSON.stringify({ success: false, 'error-codes': ['invalid-input-response'] }), {
+				status: 200,
+				headers: { 'Content-Type': 'application/json' },
+			}),
+		);
+		const reqProdFail = new Request('http://localhost/api/admin/verify', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ adminKey: testEnv.ADMIN_KEY || 'test-admin-key', turnstileToken: 'invalid' }),
+		});
+		const ctxProdFail = createExecutionContext();
+		const resProdFail = await worker.fetch(reqProdFail as any, prodEnv, ctxProdFail);
+		await waitOnExecutionContext(ctxProdFail);
+
+		expect(resProdFail.status).toBe(403);
+		const jsonProdFail = (await resProdFail.json()) as { error: string };
+		expect(jsonProdFail.error).toBe('Turnstile verification failed');
+
+		// POST with valid token but invalid admin key returns 401
+		const reqBadKey = new Request('http://localhost/api/admin/verify', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ adminKey: 'wrong-admin-key', turnstileToken: 'dev-token' }),
+		});
+		const ctxBadKey = createExecutionContext();
+		const resBadKey = await worker.fetch(reqBadKey as any, testEnv, ctxBadKey);
+		await waitOnExecutionContext(ctxBadKey);
+
+		expect(resBadKey.status).toBe(401);
+		const jsonBadKey = (await resBadKey.json()) as { error: string };
+		expect(jsonBadKey.error).toBe('Unauthorized: invalid or missing admin key');
+
+		// POST with valid token and valid admin key returns 200
+		const reqSuccess = new Request('http://localhost/api/admin/verify', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ adminKey: testEnv.ADMIN_KEY || 'test-admin-key', turnstileToken: 'dev-token' }),
+		});
+		const ctxSuccess = createExecutionContext();
+		const resSuccess = await worker.fetch(reqSuccess as any, testEnv, ctxSuccess);
+		await waitOnExecutionContext(ctxSuccess);
+
+		expect(resSuccess.status).toBe(200);
+		const jsonSuccess = (await resSuccess.json()) as { success: boolean; message: string };
+		expect(jsonSuccess.success).toBe(true);
+		expect(jsonSuccess.message).toBe('Admin authenticated');
+	});
 });

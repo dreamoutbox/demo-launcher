@@ -1,5 +1,6 @@
 import { connect } from 'cloudflare:sockets';
 import { Env } from './types';
+import { TurnstileStatus, TurnstileVerificationResult } from './turnstile';
 
 /**
  * Checks whether the current environment is development.
@@ -223,4 +224,30 @@ export async function checkHealth(
             }
         }
     }
+}
+
+/**
+ * Creates a standard JSON error Response for a failed Turnstile verification.
+ *
+ * @param verification - The failed verification result from verifyTurnstileToken
+ * @returns Response object with 400 (missing token) or 403 (invalid/failed) and JSON error details
+ *
+ * @example
+ * ```ts
+ * if (!verification.success) {
+ *     return createTurnstileErrorResponse(verification);
+ * }
+ * ```
+ */
+export function createTurnstileErrorResponse(verification: TurnstileVerificationResult): Response {
+    const isMissing = verification.status === TurnstileStatus.MISSING_TOKEN;
+    const errorMsg = isMissing ? 'Turnstile token is required' : 'Turnstile verification failed';
+    return Response.json(
+        {
+            error: errorMsg,
+            status: verification.status,
+            errorCodes: verification.errorCodes,
+        },
+        { status: isMissing ? 400 : 403 },
+    );
 }

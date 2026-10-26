@@ -31,13 +31,17 @@
         style="margin: 16px 0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
         <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
           <input type="text" id="filter-search" placeholder="Search IP, Project, Agent..." />
+          <select id="filter-action">
+            <option value="">All Actions</option>
+            <option value="LAUNCH_DEMO">LAUNCH_DEMO</option>
+            <option value="STOP_DEMO">STOP_DEMO</option>
+          </select>
           <select id="filter-status">
             <option value="">All Statuses</option>
             <option value="QUEUED">QUEUED</option>
             <option value="REJECTED">REJECTED</option>
             <option value="SUCCESS">SUCCESS</option>
             <option value="FAILED">FAILED</option>
-            <option value="STOP_DEMO">STOP_DEMO</option>
           </select>
           <select id="filter-project">
             <option value="">All Projects</option>

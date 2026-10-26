@@ -15,6 +15,12 @@
     <div class="status-box">
       <p>Enter your <code>ADMIN_KEY</code> to access the admin pages.</p>
       <form id="login-form" class="login-form">
+        <!-- Cloudflare Turnstile Protection -->
+        <div class="turnstile-wrapper">
+          <div id="turnstile-widget"></div>
+          <div id="turnstile-error" class="turnstile-error hidden"></div>
+        </div>
+
         <div class="admin-key-controls">
           <input type="password" id="admin-key-input" placeholder="Admin Key..." autocomplete="current-password"
             autofocus />

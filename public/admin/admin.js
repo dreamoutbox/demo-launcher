@@ -14,6 +14,7 @@ const refreshBtn = document.getElementById('refresh-btn');
 const refreshIcon = document.getElementById('refresh-icon');
 const autoRefreshCheck = document.getElementById('auto-refresh-check');
 const filterSearch = document.getElementById('filter-search');
+const filterAction = document.getElementById('filter-action');
 const filterStatus = document.getElementById('filter-status');
 const filterProject = document.getElementById('filter-project');
 
@@ -178,6 +179,25 @@ function populateProjectFilter(logs) {
 }
 
 /**
+ * Maps an action string to its badge styling CSS classes.
+ *
+ * @param action - Action name (e.g., 'LAUNCH_DEMO', 'STOP_DEMO')
+ * @returns Space-separated CSS class names for styling the action badge
+ *
+ * @example
+ * ```ts
+ * const badgeCls = getActionClass('LAUNCH_DEMO'); // 'action-badge action-launch-demo'
+ * ```
+ */
+function getActionClass(action) {
+    const act = (action || '').toUpperCase();
+    if (act === 'LAUNCH_DEMO') return 'action-badge action-launch-demo';
+    if (act === 'STOP_DEMO') return 'action-badge action-stop-demo';
+    if (act === 'CRON_CLEANUP') return 'action-badge action-cron-cleanup';
+    return 'action-badge';
+}
+
+/**
  * Renders the current action logs to the table matching filter criteria.
  *
  * @example
@@ -187,10 +207,12 @@ function populateProjectFilter(logs) {
  */
 function renderTable() {
     const query = filterSearch.value.toLowerCase().trim();
+    const actionFilter = filterAction ? filterAction.value : '';
     const statusFilter = filterStatus.value;
     const projectFilter = filterProject.value;
 
     const filtered = currentLogs.filter((log) => {
+        if (actionFilter && log.action !== actionFilter) return false;
         if (statusFilter && log.status !== statusFilter) return false;
         if (projectFilter && log.project_id !== projectFilter) return false;
         if (query) {
@@ -233,7 +255,7 @@ function renderTable() {
                 <div class="time-primary">${formatted}</div>
                 <div class="time-relative">${relative}</div>
               </td>
-              <td><span>${escapeHtml(log.action)}</span></td>
+              <td><span class="${getActionClass(log.action)}">${escapeHtml(log.action)}</span></td>
               <td><span class="${badgeClass}">${escapeHtml(log.status)}</span></td>
               <td>${projectDisplay}</td>
               <td>
@@ -341,6 +363,7 @@ function redirectToLogin() {
 refreshBtn.addEventListener('click', () => fetchActionLogs(currentPage));
 
 filterSearch.addEventListener('input', renderTable);
+if (filterAction) filterAction.addEventListener('change', renderTable);
 filterStatus.addEventListener('change', renderTable);
 filterProject.addEventListener('change', renderTable);
 

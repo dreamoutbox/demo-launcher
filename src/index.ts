@@ -1,6 +1,6 @@
 import projects from './projects.json';
 import { getDigitalOceanService } from './digitalocean';
-import { checkHealth, formatUptime, getMaxDemoTimeMs, isDevelopment } from './helper';
+import { checkHealth, createTurnstileErrorResponse, formatUptime, getMaxDemoTimeMs } from './helper';
 import { ActionStatus, ActionType, DemoStatus, Env, LaunchPhase, QueueMessage } from './types';
 import { verifyTurnstileToken, TurnstileStatus } from './turnstile';
 import { extractClientInfo, getActionLogs, isAdminAuthorized, recordActionLog } from './action-log';
@@ -200,14 +200,7 @@ export default {
 					}),
 				});
 
-				return Response.json(
-					{
-						error: errorMsg,
-						status: verification.status,
-						errorCodes: verification.errorCodes,
-					},
-					{ status: isMissing ? 400 : 403 },
-				);
+				return createTurnstileErrorResponse(verification);
 			}
 
 			const projectId = body?.projectId;
@@ -331,10 +324,47 @@ export default {
 			return Response.json(result);
 		}
 
-		// GET or POST /api/cron-cleanup -> Manually trigger cleanup with custom max demo time (Dev only)
+		// GET /api/admin/verify or /api/admin/login -> Return Turnstile public site key for admin login
+		if ((pathname === '/api/admin/verify' || pathname === '/api/admin/login') && req.method === 'GET') {
+			return Response.json({
+				turnstileSiteKey: env.TURNSTILE_SITE_KEY || '1x00000000000000000000AA',
+			});
+		}
+
+		// POST /api/admin/verify or /api/admin/login -> Verify admin key and Turnstile token
+		if ((pathname === '/api/admin/verify' || pathname === '/api/admin/login') && req.method === 'POST') {
+			const clientInfo = extractClientInfo(req);
+			const clientIp = clientInfo.ipAddress ?? undefined;
+			const body = (await req.json().catch(() => null)) as {
+				adminKey?: string;
+				turnstileToken?: string;
+				'cf-turnstile-response'?: string;
+			} | null;
+
+			const token = body?.turnstileToken || body?.['cf-turnstile-response'];
+			const verification = await verifyTurnstileToken(token, env, clientIp);
+			if (!verification.success) {
+				return createTurnstileErrorResponse(verification);
+			}
+
+			const candidateKey = body?.adminKey?.trim() || req.headers.get('x-admin-key')?.trim();
+			const configuredKey = env.ADMIN_KEY?.trim();
+			const isAuthorized = (configuredKey && candidateKey === configuredKey) || isAdminAuthorized(req, env);
+
+			if (!isAuthorized) {
+				return Response.json({ error: 'Unauthorized: invalid or missing admin key' }, { status: 401 });
+			}
+
+			return Response.json({
+				success: true,
+				message: 'Admin authenticated',
+			});
+		}
+
+		// GET or POST /api/cron-cleanup -> Manually trigger cleanup with custom max demo time (Admin Key protected)
 		if (pathname === '/api/cron-cleanup') {
-			if (!isDevelopment(env)) {
-				return Response.json({ error: 'Manual cron trigger is only allowed in development' }, { status: 403 });
+			if (!isAdminAuthorized(req, env)) {
+				return Response.json({ error: 'Unauthorized: invalid or missing admin key' }, { status: 401 });
 			}
 
 			// Accept ?maxDemoTimeSeconds=2 or ?maxDemoTimeMs=2000

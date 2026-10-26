@@ -111,7 +111,7 @@ sleep 3
 
 # 7. Trigger custom CRON cleanup with maxDemoTimeSeconds=2
 log_step "8. Triggering custom CRON cleanup (maxDemoTimeSeconds=2)..."
-CLEANUP_RES=$(curl -s "${BASE_URL}/api/cron-cleanup?maxDemoTimeSeconds=2")
+CLEANUP_RES=$(curl -s -H "x-admin-key: demo-admin-key" "${BASE_URL}/api/cron-cleanup?maxDemoTimeSeconds=2")
 echo "${CLEANUP_RES}" | jq .
 
 echo "${CLEANUP_RES}" | jq -e --arg pid "${PROJECT_ID}" \

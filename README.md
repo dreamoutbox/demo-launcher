@@ -90,6 +90,6 @@ Open the deployed Worker URL to browse the configured projects and request a dem
 
 - `GET /api/projects` returns projects and current demo statuses.
 - `POST /api/launch` accepts JSON such as `{"projectId":"awesome-shop-demo"}` and queues a launch request.
-- `GET /api/cron-cleanup` manually runs cleanup only in development. An optional `maxDemoTimeSeconds` query parameter sets the expiration threshold for testing.
+- `GET /api/cron-cleanup` manually runs cleanup (requires admin key authentication). An optional `maxDemoTimeSeconds` query parameter sets the expiration threshold for testing.
 
 The launch endpoint responds with `202 Accepted`; provisioning continues asynchronously in the queue. Launching is split into two queue phases: `CREATE` persists the droplet id immediately, then `POLL_HEALTH` resolves the public IP and runs the health check. Queue retries resume an interrupted attempt, and `CREATE` finds an already-created droplet through its `launch-<attemptId>` tag. Non-retryable DigitalOcean 4xx responses, such as a droplet limit error, mark the demo `FAILED` and acknowledge the message instead of retrying. The UI polls project status until the droplet IP is available. Demos are publicly reachable at their droplet IP, so only add repositories suitable for public demonstration.
