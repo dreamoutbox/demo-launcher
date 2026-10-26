@@ -1,3 +1,5 @@
+const REQUEST_TIMEOUT_MS = 10_000;
+
 /**
  * Polls http://<ip>:<port><path> until it returns a 2xx response or the timeout elapses.
  *
@@ -9,26 +11,32 @@
  * @returns true if healthy before the timeout, false otherwise.
  *
  * @example
+ * ```ts
  * const ok = await waitForHealthy('1.2.3.4', '80', '/healthz');
+ * ```
  */
 export async function waitForHealthy(
 	ip: string,
 	port: string,
 	path: string,
-	timeoutMs = 10 * 60_000,
-	intervalMs = 3_000,
+	timeoutMs = 5 * 60_000, // 5 minutes
+	intervalMs = 5_000, // 5 seconds
 ): Promise<boolean> {
 	const url = `http://${ip}:${port}${path.startsWith('/') ? path : `/${path}`}`;
 	const deadline = Date.now() + timeoutMs;
 
 	while (Date.now() < deadline) {
 		try {
-			const res = await fetch(url, { signal: AbortSignal.timeout(intervalMs) });
+			const res = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
 			if (res.ok) return true;
-		} catch {
-			// Not reachable yet (droplet booting / app starting); retry.
+			console.log(`[DO] Health check ${url} returned status ${res.status}; retrying...`);
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			console.log(`[DO] Health check ${url} pending: ${msg}; retrying...`);
 		}
+
 		await new Promise((resolve) => setTimeout(resolve, intervalMs));
 	}
+
 	return false;
 }

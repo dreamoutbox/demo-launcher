@@ -10,7 +10,7 @@ import { isNonRetryableError } from './digitalocean-error';
 /** Delay between IP polling queue messages. */
 const POLL_RETRY_DELAY_SECONDS = 10;
 /** Give up when DigitalOcean has not assigned a public IPv4 in this time. */
-const IP_POLL_DEADLINE_MS = 8 * 60_000;
+const IP_POLL_DEADLINE_MS = 5 * 60_000;
 
 interface ProjectDemoRow {
 	project_id: string;
@@ -68,7 +68,7 @@ export class ProjectLauncher extends DurableObject<Env> {
 
 			if (claim.dropletId) {
 				console.log(`[DO] Resuming "${projectId}" with existing Droplet ${claim.dropletId}...`);
-				await this.schedulePoll(projectId, claim.attemptId);
+				await this.queueAddPollMessage(projectId, claim.attemptId);
 				return;
 			}
 
@@ -81,7 +81,7 @@ export class ProjectLauncher extends DurableObject<Env> {
 				if (!(await this.saveDroplet(projectId, claim.attemptId, existing))) {
 					return;
 				}
-				await this.schedulePoll(projectId, claim.attemptId);
+				await this.queueAddPollMessage(projectId, claim.attemptId);
 				return;
 			}
 
@@ -99,7 +99,7 @@ export class ProjectLauncher extends DurableObject<Env> {
 				return;
 			}
 
-			await this.schedulePoll(projectId, claim.attemptId);
+			await this.queueAddPollMessage(projectId, claim.attemptId);
 
 			console.log(`[DO] Droplet ${droplet.id} created for "${projectId}". IP/health polling queued.`);
 		} catch (err) {
@@ -200,7 +200,7 @@ export class ProjectLauncher extends DurableObject<Env> {
 					console.log(
 						`[DO] Droplet ${dropletId} for "${projectId}" has no public IP yet (elapsed: ${elapsedSeconds}s); polling again.`,
 					);
-					await this.schedulePoll(projectId, attemptId);
+					await this.queueAddPollMessage(projectId, attemptId);
 					return;
 				}
 
@@ -322,7 +322,7 @@ export class ProjectLauncher extends DurableObject<Env> {
 	}
 
 	/** Enqueues another IP/health message after a short delay. */
-	private async schedulePoll(projectId: string, attemptId: string): Promise<void> {
+	private async queueAddPollMessage(projectId: string, attemptId: string): Promise<void> {
 		await this.env.DEMO_LAUNCHER_QUEUE.send(
 			{ projectId, phase: LaunchPhase.POLL_HEALTH, attemptId },
 			{ delaySeconds: POLL_RETRY_DELAY_SECONDS },
