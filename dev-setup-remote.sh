@@ -104,6 +104,9 @@ set_secret "ADMIN_KEY" "Admin Key (used to authorize /api/admin/* endpoints)" "t
 set_secret "DROPLET_SSH_PUBLIC_KEY" "DigitalOcean Droplet SSH Public Key (enter key or file path)" "false" "${DEFAULT_PUB_KEY}"
 set_secret "DROPLET_SSH_PRIVATE_KEY" "DigitalOcean Droplet SSH Private Key (enter key or file path)" "true" "${DEFAULT_PRIV_KEY}"
 
+# deploy the worker code
+npx wrangler deploy
+
 echo ""
 echo "========================================================"
 echo "Remote setup complete."

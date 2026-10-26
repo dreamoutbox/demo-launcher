@@ -6,7 +6,6 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 	<title>GitHub Project Demo Launcher</title>
 	<link rel="stylesheet" href="/main.css" />
-	<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 
 <body>
@@ -19,9 +18,7 @@
 
 			<!-- Cloudflare Turnstile Protection -->
 			<div class="turnstile-wrapper">
-				<div id="turnstile-widget" class="cf-turnstile" data-sitekey="1x00000000000000000000AA"
-					data-callback="onTurnstileSuccess" data-expired-callback="onTurnstileExpired"
-					data-error-callback="onTurnstileError"></div>
+				<div id="turnstile-widget"></div>
 				<div id="turnstile-error" class="turnstile-error hidden"></div>
 			</div>
 

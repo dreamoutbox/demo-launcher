@@ -83,8 +83,10 @@ function scheduleNextPoll(status) {
 }
 
 let currentTurnstileToken = null;
+let turnstileWidgetId = null;
+let turnstileApiPromise = null;
 
-// Turnstile callbacks attached to global window for implicit widget
+// Turnstile callbacks used by the explicitly rendered widget
 window.onTurnstileSuccess = function (token) {
 	currentTurnstileToken = token;
 	clearTurnstileError();
@@ -118,10 +120,47 @@ function resetTurnstile() {
 	clearTurnstileError();
 	if (window.turnstile && typeof window.turnstile.reset === 'function') {
 		try {
-			window.turnstile.reset();
+			window.turnstile.reset(turnstileWidgetId);
 		} catch (err) {
 			console.warn('Turnstile reset error:', err);
 		}
+	}
+}
+
+function loadTurnstileApi() {
+	if (window.turnstile) return Promise.resolve();
+	if (turnstileApiPromise) return turnstileApiPromise;
+
+	turnstileApiPromise = new Promise((resolve, reject) => {
+		const script = document.createElement('script');
+		script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+		script.async = true;
+		script.onload = () => (window.turnstile ? resolve() : reject(new Error('Turnstile API failed to load.')));
+		script.onerror = () => reject(new Error('Turnstile API failed to load.'));
+		document.head.appendChild(script);
+	});
+
+	return turnstileApiPromise;
+}
+
+async function renderTurnstile(siteKey) {
+	if (!siteKey) {
+		showTurnstileError('Turnstile is unavailable because its site key was not provided.');
+		return;
+	}
+
+	try {
+		await loadTurnstileApi();
+		if (turnstileWidgetId !== null) return;
+
+		turnstileWidgetId = window.turnstile.render('#turnstile-widget', {
+			sitekey: siteKey,
+			callback: window.onTurnstileSuccess,
+			'expired-callback': window.onTurnstileExpired,
+			'error-callback': window.onTurnstileError,
+		});
+	} catch (err) {
+		showTurnstileError(err.message);
 	}
 }
 
@@ -130,6 +169,7 @@ async function loadProjectList() {
 	try {
 		const res = await fetch('/api/projects');
 		const data = await res.json();
+		renderTurnstile(data.turnstileSiteKey);
 		cachedProjects = data.projects || [];
 		if (typeof data.maxDemoTimeSeconds === 'number') maxDemoTimeLabel = formatSeconds(data.maxDemoTimeSeconds);
 		const statuses = data.statuses || [];

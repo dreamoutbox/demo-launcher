@@ -8,6 +8,8 @@
 	"main": "src/index.ts",
 	"compatibility_date": "2026-10-06",
 	"keep_vars": true,
+	"workers_dev": true,
+	"preview_urls": true,
 	"observability": {
 		"logs": {
 			"enabled": true,
@@ -61,7 +63,7 @@
 	"migrations": [
 		{
 			"tag": "v1",
-			"new_classes": [
+			"new_sqlite_classes": [
 				"ProjectLauncher"
 			],
 		},
@@ -78,11 +80,12 @@
 	 * https://developers.cloudflare.com/workers/configuration/secrets/
 	 */
 	"vars": {
-		"MAX_DEMO_TIME_SECONDS": "1800",
+		"MAX_DEMO_TIME_SECONDS": "1200",
 		"DO_REGION": "sgp1",
 		"DO_SIZE": "s-1vcpu-1gb",
 		"DO_IMAGE": "ubuntu-24-04-x64",
-		"ADMIN_KEY": "demo-admin-key",
+		"ENVIRONMENT": "production",
+		// "ADMIN_KEY": "demo-admin-key",
 		// "DO_FIREWALL_NAME": "demo-launcher-fw",
 		// "DO_FIREWALL_TAG": "demo-launcher-fw"
 		// "LAUNCH_ALLOW_TIME_RANGE": "07:00:00-20:00:00,21:00:00-23:00:00"

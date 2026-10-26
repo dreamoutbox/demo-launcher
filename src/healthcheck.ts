@@ -15,8 +15,8 @@ export async function waitForHealthy(
 	ip: string,
 	port: string,
 	path: string,
-	timeoutMs = 5 * 60_000,
-	intervalMs = 5_000,
+	timeoutMs = 10 * 60_000,
+	intervalMs = 3_000,
 ): Promise<boolean> {
 	const url = `http://${ip}:${port}${path.startsWith('/') ? path : `/${path}`}`;
 	const deadline = Date.now() + timeoutMs;
