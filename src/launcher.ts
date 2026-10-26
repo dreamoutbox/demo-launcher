@@ -10,7 +10,7 @@ import { isNonRetryableError } from './digitalocean-error';
 /** Delay between IP polling queue messages. */
 const POLL_RETRY_DELAY_SECONDS = 10;
 /** Give up when DigitalOcean has not assigned a public IPv4 in this time. */
-const IP_POLL_DEADLINE_MS = 5 * 60_000;
+const IP_POLL_DEADLINE_MS = 8 * 60_000;
 
 interface ProjectDemoRow {
 	project_id: string;
@@ -189,13 +189,17 @@ export class ProjectLauncher extends DurableObject<Env> {
 
 				if (!ip) {
 					const launchedAt = row.launched_at ?? Date.now();
-					if (Date.now() - launchedAt > IP_POLL_DEADLINE_MS) {
+					const elapsedMs = Date.now() - launchedAt;
+					if (elapsedMs > IP_POLL_DEADLINE_MS) {
 						await this.markFailed(projectId, attemptId);
 						console.error(`[DO] Droplet ${dropletId} for "${projectId}" has no public IP after ${IP_POLL_DEADLINE_MS}ms.`);
 						return;
 					}
 
-					console.log(`[DO] Droplet ${dropletId} for "${projectId}" has no public IP yet; polling again.`);
+					const elapsedSeconds = Math.round(elapsedMs / 1000);
+					console.log(
+						`[DO] Droplet ${dropletId} for "${projectId}" has no public IP yet (elapsed: ${elapsedSeconds}s); polling again.`,
+					);
 					await this.schedulePoll(projectId, attemptId);
 					return;
 				}

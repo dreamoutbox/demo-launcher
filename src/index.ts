@@ -319,7 +319,7 @@ export default {
 
 		// GET or POST /api/cron-cleanup -> Manually trigger cleanup with custom max demo time (Dev only)
 		if (pathname === '/api/cron-cleanup') {
-			if (!isDevelopment(env, req.url)) {
+			if (!isDevelopment(env)) {
 				return Response.json({ error: 'Manual cron trigger is only allowed in development' }, { status: 403 });
 			}
 

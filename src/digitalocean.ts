@@ -49,7 +49,7 @@ export function getDigitalOceanService(env: Env, requestUrl?: string): IDigitalO
 	if (isRealApiEnabled(env)) {
 		return new DigitalOceanProdService(env.DO_API_KEY, config);
 	}
-	if (isDevelopment(env, requestUrl)) {
+	if (isDevelopment(env)) {
 		return new DigitalOceanMockService(env.DO_API_KEY, env.DO_FIREWALL_TAG);
 	}
 	return new DigitalOceanProdService(env.DO_API_KEY, config);

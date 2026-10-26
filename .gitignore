@@ -169,3 +169,5 @@ dist
 
 # SSH Keys
 ssh-keys/
+production.log.json
+production.log.cleaned.json

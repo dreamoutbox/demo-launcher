@@ -1,12 +1,20 @@
 import { Env } from './types';
 
 /**
- * Checks if the current environment is local development.
+ * Checks whether the current environment is development.
+ *
+ * @param env - Worker environment bindings containing optional ENVIRONMENT variable
+ * @returns True when ENVIRONMENT is not 'production'
+ *
+ * @example
+ * ```ts
+ * if (isDevelopment(env)) {
+ *     // Development-specific behavior
+ * }
+ * ```
  */
-
-export function isDevelopment(env: Env, requestUrl?: string): boolean {
-    const isLocalHost = requestUrl ? ['localhost', '127.0.0.1'].includes(new URL(requestUrl).hostname) : false;
-    return env.ENVIRONMENT !== 'production' || isLocalHost;
+export function isDevelopment(env: Env): boolean {
+    return env.ENVIRONMENT !== 'production';
 }
 
 /**
