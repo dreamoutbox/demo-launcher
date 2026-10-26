@@ -26,7 +26,13 @@
 
 - [x] fix stuck at `LAUNCHING` status if worker reload in dev.
 
+- [x] fix health check problem
+
+- [ ] make manual CRON clean up use admin key instead of error "Cleanup failed: Manual cron trigger is only allowed in development"
+
 - [ ] add turnstile to admin api and frontend
+
+- [ ] add highlight color to all actions in /admin/action_log
 
 - [ ] set REPO_URL and DROPLET_IP env in created demo droplet
 

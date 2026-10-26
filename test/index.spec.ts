@@ -1034,4 +1034,27 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 		expect(row?.droplet_id).toBeNull();
 		expect(row?.attempt_id).toBeNull();
 	});
+
+	it('24. GET /api/health-check should require ip parameter and return probe status', async () => {
+		// Missing IP
+		const reqNoIp = new Request('http://localhost/api/health-check', { method: 'GET' });
+		const ctxNoIp = createExecutionContext();
+		const resNoIp = await worker.fetch(reqNoIp as any, testEnv, ctxNoIp);
+		await waitOnExecutionContext(ctxNoIp);
+
+		expect(resNoIp.status).toBe(400);
+		const jsonNoIp = await resNoIp.json();
+		expect(jsonNoIp).toEqual({ error: 'Missing ip parameter' });
+
+		// With IP and invalid port to test error response path
+		const reqInvalid = new Request('http://localhost/api/health-check?ip=1.2.3.4&port=invalid', { method: 'GET' });
+		const ctxInvalid = createExecutionContext();
+		const resInvalid = await worker.fetch(reqInvalid as any, testEnv, ctxInvalid);
+		await waitOnExecutionContext(ctxInvalid);
+
+		expect(resInvalid.status).toBe(200);
+		const jsonInvalid = (await resInvalid.json()) as { healthy: boolean; error?: string };
+		expect(jsonInvalid.healthy).toBe(false);
+		expect(jsonInvalid.error).toContain('Invalid port');
+	});
 });

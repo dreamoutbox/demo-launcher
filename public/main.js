@@ -59,14 +59,14 @@ async function probeAppHealth(projectId, ip) {
 		if (!activeProjectId || activeProjectId !== projectId) return;
 
 		if (data.healthy) {
-			detailHealth.textContent = 'Ready (HTTP 200)';
+			detailHealth.textContent = 'Ready';
 			detailHealth.className = 'status-running';
 			launchNote.classList.add('hidden');
 			stopHealthCheck();
 			return;
 		}
 
-		detailHealth.textContent = data.status ? `Starting up (HTTP ${data.status})...` : 'Starting up (booting app)...';
+		detailHealth.textContent = 'Starting up (booting app)...';
 		detailHealth.className = 'status-launching';
 	} catch {
 		if (!activeProjectId || activeProjectId !== projectId) return;

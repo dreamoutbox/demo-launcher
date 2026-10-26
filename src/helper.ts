@@ -1,3 +1,4 @@
+import { connect } from 'cloudflare:sockets';
 import { Env } from './types';
 
 /**
@@ -159,46 +160,67 @@ export function getMaxDemoTimeMs(env: Env): number {
     return (Number.isFinite(seconds) && seconds > 0 ? seconds : DEFAULT_MAX_DEMO_TIME_SECONDS) * 1000;
 }
 
+type SocketConnection = ReturnType<typeof connect>;
+
 /**
- * Performs a single healthcheck probe against http://<ip>:<port><path>.
+ * Performs a TCP socket probe against a target IP and port to determine if the service is accepting connections.
  *
  * @param ip - Target droplet public IPv4 address
- * @param port - Application port
- * @param path - Health endpoint path
- * @param timeoutMs - Maximum milliseconds to wait for a response (defaults to 4000ms)
- * @returns Object with healthy boolean flag and HTTP status or error message
+ * @param port - Application port string or number
+ * @param _path - Unused in TCP probing, retained for signature compatibility with HTTP checks
+ * @param timeoutMs - Maximum milliseconds to wait for TCP connection establishment (defaults to 4000ms)
+ * @returns Object indicating whether the TCP port is reachable and healthy
  *
  * @example
  * ```ts
- * const result = await checkHealth('1.2.3.4', '8080', '/login');
+ * const result = await checkHealth('168.144.254.91', '8080');
  * if (result.healthy) {
- *     // Server is ready
+ *     // TCP port is accepting connections
  * }
  * ```
  */
 export async function checkHealth(
     ip: string,
-    port: string,
-    path: string,
+    port: string | number,
+    _path = '/',
     timeoutMs = 4_000,
 ): Promise<{ healthy: boolean; status?: number; error?: string }> {
-    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-    const url = `http://${ip}:${port}${normalizedPath}`;
+    const portNum = typeof port === 'number' ? port : Number.parseInt(port, 10);
+    if (!Number.isFinite(portNum) || portNum <= 0 || portNum > 65535) {
+        return { healthy: false, error: `Invalid port: ${port}` };
+    }
+
+    let socket: SocketConnection | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
 
     try {
-        const res = await fetch(url, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) demo-launcher-healthcheck',
-                'Accept': '*/*',
-            },
-            signal: AbortSignal.timeout(timeoutMs),
-        });
-        return { healthy: res.ok, status: res.status };
+        socket = connect({ hostname: ip, port: portNum });
+        const openedPromise = socket.opened;
+        openedPromise.catch(() => { });
+
+        await Promise.race([
+            openedPromise,
+            new Promise<never>((_, reject) => {
+                timer = setTimeout(() => reject(new Error(`TCP probe timed out after ${timeoutMs}ms`)), timeoutMs);
+            }),
+        ]);
+
+        return { healthy: true, status: 200 };
     } catch (err) {
         return {
             healthy: false,
             error: err instanceof Error ? err.message : String(err),
         };
+    } finally {
+        if (timer !== undefined) {
+            clearTimeout(timer);
+        }
+        if (socket) {
+            try {
+                await socket.close();
+            } catch {
+                // Socket may already be closed or rejected during connection failure
+            }
+        }
     }
 }
-
