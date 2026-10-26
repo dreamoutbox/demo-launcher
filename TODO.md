@@ -26,6 +26,8 @@
 
 - [x] fix stuck at `LAUNCHING` status if worker reload in dev.
 
+- [ ] set REPO_URL and DROPLET_IP env in created demo droplet
+
 - [ ] make projects.json as secret. use `npx wrangler secret put PROJECTS_JSON < projects.json`
 
 - [ ] add shell script for update `PROJECTS_JSON` secret.

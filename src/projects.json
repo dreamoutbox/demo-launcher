@@ -1,5 +1,14 @@
 [
   {
+    "id": "rust-playground-server",
+    "name": "rust-playground-server",
+    "repoUrl": "https://github.com/dreamoutbox/rust-playground-server",
+    "healthcheckPort": "3000",
+    "healthcheckPath": "/",
+    "appPort": "3000",
+    "size": "s-1vcpu-1gb"
+  },
+  {
     "id": "java-apartment-management-system",
     "name": "java-apartment-management-system",
     "repoUrl": "https://github.com/dreamoutbox/java-apartment-management-system",
@@ -18,21 +27,30 @@
     "size": "s-1vcpu-1gb"
   },
   {
-    "id": "rust-playground-server",
-    "name": "rust-playground-server",
-    "repoUrl": "https://github.com/dreamoutbox/rust-playground-server",
+    "id": "rust-restaurant-system",
+    "name": "rust-restaurant-system",
+    "repoUrl": "https://github.com/dreamoutbox/rust-restaurant-system",
     "healthcheckPort": "3000",
     "healthcheckPath": "/",
     "appPort": "3000",
-    "size": "s-1vcpu-1gb"
+    "size": "s-1vcpu-2gb"
   },
   {
-    "id": "demo-launcher-simple-project",
-    "name": "demo-launcher-simple-project",
-    "repoUrl": "https://github.com/dreamoutbox/demo-launcher-simple-project",
-    "healthcheckPort": "80",
+    "id": "theater-seat-booking",
+    "name": "theater-seat-booking",
+    "repoUrl": "https://github.com/dreamoutbox/theater-seat-booking",
+    "healthcheckPort": "3000",
     "healthcheckPath": "/",
-    "appPort": "80",
-    "size": "s-1vcpu-1gb"
+    "appPort": "3000",
+    "size": "s-2vcpu-4gb"
+  },
+  {
+    "id": "delivery-app",
+    "name": "delivery-app",
+    "repoUrl": "https://github.com/dreamoutbox/delivery-app",
+    "healthcheckPort": "8080",
+    "healthcheckPath": "/",
+    "appPort": "8080",
+    "size": "s-2vcpu-4gb"
   }
 ]
