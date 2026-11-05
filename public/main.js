@@ -346,7 +346,8 @@ async function handleLaunchClick(project) {
 
 		if (!res.ok) {
 			const errData = await res.json().catch(() => ({}));
-			detailStatus.textContent = 'Launch rejected: ' + (errData.error || res.statusText);
+			const msg = errData.error || res.statusText;
+			detailStatus.textContent = res.status === 429 ? msg : 'Launch rejected: ' + msg;
 			resetTurnstile();
 			return;
 		}

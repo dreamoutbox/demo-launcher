@@ -3,7 +3,7 @@ import projects from './projects.json';
 import { getDigitalOceanService } from './digitalocean';
 import { DemoStatus, DropletInfo, Env, LaunchPhase } from './types';
 import { Mutex } from './mutex';
-import { buildLaunchTag } from './helper';
+import { buildLaunchTag, countActiveDemos, getMaxInstances, isProjectActive } from './helper';
 import { isNonRetryableError } from './digitalocean-error';
 
 /** Delay between IP polling queue messages. */
@@ -46,11 +46,12 @@ export class ProjectLauncher extends DurableObject<Env> {
 	 * accepts the create request, then enqueues a POLL_HEALTH message.
 	 *
 	 * @param projectId - Project ID from `src/projects.json`
+	 * @param maxInstancesLimit - Optional override for max concurrent instances limit
 	 *
 	 * @example
 	 * await stub.launch('go-pos');
 	 */
-	async launch(projectId: string): Promise<void> {
+	async launch(projectId: string, maxInstancesLimit?: number | null): Promise<void> {
 		const project = projects.find((p) => p.id === projectId);
 		if (!project) {
 			console.error(`[DO] Project "${projectId}" not found in src/projects.json. Skipping.`);
@@ -60,6 +61,20 @@ export class ProjectLauncher extends DurableObject<Env> {
 		const unlock = await this.mutex.lock();
 
 		try {
+			const maxInstances = maxInstancesLimit ?? getMaxInstances(this.env);
+			if (maxInstances !== null) {
+				const isAlreadyActive = await isProjectActive(this.env, projectId);
+				if (!isAlreadyActive) {
+					const activeCount = await countActiveDemos(this.env);
+					if (activeCount >= maxInstances) {
+						console.warn(
+							`[DO] Project "${projectId}" launch rejected: active instances (${activeCount}) reached limit (${maxInstances}).`,
+						);
+						return;
+					}
+				}
+			}
+
 			const claim = await this.claimLaunch(projectId, Date.now());
 			if (!claim) {
 				console.log(`[DO] Project "${projectId}" is RUNNING. Skipping.`);

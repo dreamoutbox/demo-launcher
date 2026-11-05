@@ -42,15 +42,15 @@ Build/test: `pnpm test` (vitest, `test/*.spec.ts`), `pnpm types` after `wrangler
   - [x] Update class docstring ("one instance per project") and tests (concurrent launch of different projects, same project still creates one droplet).
 - Done when: `pnpm test` passes; two different projects launched concurrently both succeed via the same DO instance.
 
-### Phase 4: Limit concurrent instances [STATUS: TODO]
+### Phase 4: Limit concurrent instances [STATUS: DONE]
 - Goal: cap simultaneous demo droplets via env.
 - Tasks:
-  - [ ] Add env `MAX_INSTANCES` (positive integer; unset = unlimited) in `wrangler.jsonc` vars, `TEMPLATE.env`; `pnpm types`.
-  - [ ] Add helper `countActiveDemos(env)` in `src/helper.ts`: count `project_demos` rows with status `LAUNCHING` or `RUNNING`.
-  - [ ] `POST /api/launch` (`src/index.ts`): if the project is not already active and count >= limit, log `ActionStatus.REJECTED` and return 429 with a clear message.
-  - [ ] Re-check in `ProjectLauncher.launch` inside the global mutex, before claiming (count + claim is now atomic across projects, so the cap is strict); on exceed, mark the demo STOPPED/FAILED per existing conventions and ack.
-  - [ ] Frontend (`public/main.js`): show the 429 message to the user.
-  - [ ] Tests: under limit launches, at limit rejected with 429 + action log, relaunch of already-active project not blocked, unset env means unlimited.
+  - [x] Add env `MAX_INSTANCES` (positive integer; unset = unlimited) in `wrangler.jsonc` vars, `TEMPLATE.env`; `pnpm types`.
+  - [x] Add helper `countActiveDemos(env)` in `src/helper.ts`: count `project_demos` rows with status `LAUNCHING` or `RUNNING`.
+  - [x] `POST /api/launch` (`src/index.ts`): if the project is not already active and count >= limit, log `ActionStatus.REJECTED` and return 429 with a clear message.
+  - [x] Re-check in `ProjectLauncher.launch` inside the global mutex, before claiming (count + claim is now atomic across projects, so the cap is strict); on exceed, mark the demo STOPPED/FAILED per existing conventions and ack.
+  - [x] Frontend (`public/main.js`): show the 429 message to the user.
+  - [x] Tests: under limit launches, at limit rejected with 429 + action log, relaunch of already-active project not blocked, unset env means unlimited.
 - Done when: `pnpm test` passes; with `MAX_INSTANCES=1` a second distinct project launch returns 429.
 
 ### Phase 5: Docs and TODO cleanup [STATUS: TODO]

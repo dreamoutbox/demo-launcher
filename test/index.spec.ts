@@ -18,6 +18,9 @@ import {
 	buildDropletTags,
 	buildFirewallInboundRules,
 	buildStartupScript,
+	countActiveDemos,
+	getMaxInstances,
+	isProjectActive,
 	isValidGitBranch,
 	isValidPortOrRange,
 	parsePortList,
@@ -1346,5 +1349,127 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 		const jsonSuccess = (await resSuccess.json()) as { success: boolean; message: string };
 		expect(jsonSuccess.success).toBe(true);
 		expect(jsonSuccess.message).toBe('Admin authenticated');
+	});
+
+	it('29. getMaxInstances, countActiveDemos, and isProjectActive helpers', async () => {
+		expect(getMaxInstances({ ...testEnv, MAX_INSTANCES: '3' } as any)).toBe(3);
+		expect(getMaxInstances({ ...testEnv, MAX_INSTANCES: 'invalid' } as any)).toBeNull();
+		expect(getMaxInstances({ ...testEnv, MAX_INSTANCES: '0' } as any)).toBeNull();
+		expect(getMaxInstances({ ...testEnv, MAX_INSTANCES: '-5' } as any)).toBeNull();
+		expect(getMaxInstances({ ...testEnv, MAX_INSTANCES: '' } as any)).toBeNull();
+		expect(getMaxInstances(testEnv)).toBeNull();
+
+		// Clean DB state
+		await testEnv.mydb.prepare('DELETE FROM project_demos').run();
+		expect(await countActiveDemos(testEnv)).toBe(0);
+		expect(await isProjectActive(testEnv, 'proj-1')).toBe(false);
+
+		// Insert 1 RUNNING, 1 LAUNCHING, 1 STOPPED, 1 FAILED
+		await testEnv.mydb.prepare("INSERT INTO project_demos (project_id, status) VALUES ('p1', 'RUNNING')").run();
+		await testEnv.mydb.prepare("INSERT INTO project_demos (project_id, status) VALUES ('p2', 'LAUNCHING')").run();
+		await testEnv.mydb.prepare("INSERT INTO project_demos (project_id, status) VALUES ('p3', 'STOPPED')").run();
+		await testEnv.mydb.prepare("INSERT INTO project_demos (project_id, status) VALUES ('p4', 'FAILED')").run();
+
+		expect(await countActiveDemos(testEnv)).toBe(2);
+		expect(await isProjectActive(testEnv, 'p1')).toBe(true);
+		expect(await isProjectActive(testEnv, 'p2')).toBe(true);
+		expect(await isProjectActive(testEnv, 'p3')).toBe(false);
+		expect(await isProjectActive(testEnv, 'p4')).toBe(false);
+	});
+
+	it('30. POST /api/launch should reject with 429 when MAX_INSTANCES is reached', async () => {
+		await testEnv.mydb.prepare('DELETE FROM project_demos').run();
+		await testEnv.mydb.prepare('DELETE FROM action_logs').run();
+
+		const limitedEnv: Env = {
+			...testEnv,
+			MAX_INSTANCES: '1',
+		} as any;
+
+		// 1. First launch for project 0 should succeed
+		const req1 = new Request('http://localhost/api/launch', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ projectId: projects[0].id, turnstileToken: 'dev-token' }),
+		});
+		const ctx1 = createExecutionContext();
+		const res1 = await worker.fetch(req1 as any, limitedEnv, ctx1);
+		await waitOnExecutionContext(ctx1);
+		expect(res1.status).toBe(202);
+
+		// Mark projects[0] as RUNNING in DB
+		await testEnv.mydb
+			.prepare("INSERT OR REPLACE INTO project_demos (project_id, status) VALUES (?1, 'RUNNING')")
+			.bind(projects[0].id)
+			.run();
+
+		// 2. Launch for projects[1] should be rejected with 429 because count is at limit (1)
+		const req2 = new Request('http://localhost/api/launch', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'CF-Connecting-IP': '198.51.100.99',
+			},
+			body: JSON.stringify({ projectId: projects[1].id, turnstileToken: 'dev-token' }),
+		});
+		const ctx2 = createExecutionContext();
+		const res2 = await worker.fetch(req2 as any, limitedEnv, ctx2);
+		await waitOnExecutionContext(ctx2);
+		expect(res2.status).toBe(429);
+		const json2 = (await res2.json()) as { error: string };
+		expect(json2.error).toContain('Concurrent demo instances limit reached (1)');
+
+		// Verify action log recorded the rejection
+		const { results: logs } = await testEnv.mydb
+			.prepare('SELECT * FROM action_logs WHERE ip_address = ?1')
+			.bind('198.51.100.99')
+			.all<ActionLogRecord>();
+		expect(logs.length).toBe(1);
+		expect(logs[0].status).toBe(ActionStatus.REJECTED);
+
+		// 3. Relaunch of the SAME already-active project (projects[0]) should NOT be rejected by limit
+		const req3 = new Request('http://localhost/api/launch', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ projectId: projects[0].id, turnstileToken: 'dev-token' }),
+		});
+		const ctx3 = createExecutionContext();
+		const res3 = await worker.fetch(req3 as any, limitedEnv, ctx3);
+		await waitOnExecutionContext(ctx3);
+		expect(res3.status).toBe(202);
+	});
+
+	it('31. ProjectLauncher.launch should skip provisioning when active instances limit is reached', async () => {
+		await testEnv.mydb.prepare('DELETE FROM project_demos').run();
+
+		const limitedEnv: Env = {
+			...testEnv,
+			MAX_INSTANCES: '1',
+		} as any;
+
+		// Simulate 1 instance already RUNNING in DB
+		await testEnv.mydb
+			.prepare("INSERT INTO project_demos (project_id, status) VALUES (?1, 'RUNNING')")
+			.bind(projects[0].id)
+			.run();
+
+		const createDropletSpy = vi.spyOn(DigitalOceanMockService.prototype, 'createDroplet');
+
+		// Dispatch launch for a second project
+		const batch = createMessageBatch<QueueMessage>('demo-launch-queue', [
+			{
+				id: 'msg-limit-test',
+				timestamp: new Date(),
+				body: { projectId: projects[1].id },
+				attempts: 1,
+			},
+		]);
+
+		const ctx = createExecutionContext();
+		await worker.queue(batch, limitedEnv, ctx);
+		const result = await getQueueResult(batch, ctx);
+
+		expect(result.explicitAcks).toEqual(['msg-limit-test']);
+		expect(createDropletSpy).not.toHaveBeenCalled();
 	});
 });

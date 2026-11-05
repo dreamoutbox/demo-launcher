@@ -1,6 +1,15 @@
 import projects from './projects.json';
 import { getDigitalOceanService } from './digitalocean';
-import { checkHealth, createTurnstileErrorResponse, formatUptime, getMaxDemoTimeMs, GLOBAL_LAUNCHER_NAME } from './helper';
+import {
+	checkHealth,
+	countActiveDemos,
+	createTurnstileErrorResponse,
+	formatUptime,
+	getMaxDemoTimeMs,
+	getMaxInstances,
+	GLOBAL_LAUNCHER_NAME,
+	isProjectActive,
+} from './helper';
 import { ActionStatus, ActionType, DemoStatus, Env, LaunchPhase, QueueMessage } from './types';
 import { verifyTurnstileToken, TurnstileStatus } from './turnstile';
 import { extractClientInfo, getActionLogs, isAdminAuthorized, recordActionLog } from './action-log';
@@ -219,6 +228,30 @@ export default {
 				return Response.json({ error: 'Invalid or unknown projectId' }, { status: 400 });
 			}
 
+			const maxInstances = getMaxInstances(env);
+			if (maxInstances !== null) {
+				const isAlreadyActive = await isProjectActive(env, project.id);
+				if (!isAlreadyActive) {
+					const activeCount = await countActiveDemos(env);
+					if (activeCount >= maxInstances) {
+						await recordActionLog(env, {
+							action: ActionType.LAUNCH_DEMO,
+							projectId: project.id,
+							ipAddress: clientInfo.ipAddress,
+							country: clientInfo.country,
+							userAgent: clientInfo.userAgent,
+							status: ActionStatus.REJECTED,
+							details: JSON.stringify({ error: `Concurrent demo instances limit reached (${maxInstances})` }),
+						});
+
+						return Response.json(
+							{ error: `Concurrent demo instances limit reached (${maxInstances}). Please try again later.` },
+							{ status: 429 },
+						);
+					}
+				}
+			}
+
 			// Enqueue launch job
 			await env.DEMO_LAUNCHER_QUEUE.send({ projectId: project.id, phase: LaunchPhase.CREATE });
 
@@ -422,7 +455,7 @@ export default {
 					await stub.pollAndHealth(projectId, attemptId);
 				} else {
 					// Legacy messages have no phase and are treated as CREATE.
-					await stub.launch(projectId);
+					await stub.launch(projectId, getMaxInstances(env));
 				}
 				message.ack();
 			} catch (err) {

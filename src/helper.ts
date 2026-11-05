@@ -352,6 +352,64 @@ export function getMaxDemoTimeMs(env: Env): number {
     return (Number.isFinite(seconds) && seconds > 0 ? seconds : DEFAULT_MAX_DEMO_TIME_SECONDS) * 1000;
 }
 
+/**
+ * Parses the MAX_INSTANCES environment variable into a positive integer limit, or null if unset/unlimited.
+ *
+ * @param env - Worker environment bindings containing optional MAX_INSTANCES
+ * @returns Positive integer instance limit, or null if unlimited
+ *
+ * @example
+ * ```ts
+ * const limit = getMaxInstances(env);
+ * ```
+ */
+export function getMaxInstances(env: Env): number | null {
+    const raw = (env as any).MAX_INSTANCES;
+    if (raw === undefined || raw === null || raw === '') {
+        return null;
+    }
+    const num = Number.parseInt(String(raw), 10);
+    return Number.isFinite(num) && num > 0 ? num : null;
+}
+
+/**
+ * Counts the current number of active demo instances in D1 (status in LAUNCHING or RUNNING).
+ *
+ * @param env - Worker environment containing the D1 database binding
+ * @returns Number of active demo instances
+ *
+ * @example
+ * ```ts
+ * const count = await countActiveDemos(env);
+ * ```
+ */
+export async function countActiveDemos(env: Env): Promise<number> {
+    const result = await env.mydb
+        .prepare("SELECT COUNT(*) as total FROM project_demos WHERE status IN ('LAUNCHING', 'RUNNING')")
+        .first<{ total: number }>();
+    return result?.total ?? 0;
+}
+
+/**
+ * Checks whether a specific project currently has an active demo in D1 (status in LAUNCHING or RUNNING).
+ *
+ * @param env - Worker environment containing the D1 database binding
+ * @param projectId - Project ID to check
+ * @returns True if the project has an active demo
+ *
+ * @example
+ * ```ts
+ * const active = await isProjectActive(env, 'go-pos');
+ * ```
+ */
+export async function isProjectActive(env: Env, projectId: string): Promise<boolean> {
+    const result = await env.mydb
+        .prepare("SELECT status FROM project_demos WHERE project_id = ?1 AND status IN ('LAUNCHING', 'RUNNING')")
+        .bind(projectId)
+        .first<{ status: string }>();
+    return result !== null;
+}
+
 type SocketConnection = ReturnType<typeof connect>;
 
 /**
