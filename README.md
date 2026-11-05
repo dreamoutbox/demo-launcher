@@ -67,7 +67,7 @@ Every newly launched droplet is automatically tagged with `['demo-launcher', <pr
 
 - **Inbound rules:** TCP ports 22, 80, 443 and ICMP from `0.0.0.0/0` and `::/0`.
 - **Outbound rules:** All TCP, UDP, and ICMP traffic to any destination.
-- **Environment overrides:** Set `DO_FIREWALL_NAME` and `DO_FIREWALL_TAG` in `wrangler.jsonc` or `.dev.vars` to customize the firewall name and tag.
+- **Environment overrides:** Set `DO_FIREWALL_NAME` and `DO_FIREWALL_TAG` in `wrangler.jsonc` or `.env` to customize the firewall name and tag.
 
 ### Database Migrations
 

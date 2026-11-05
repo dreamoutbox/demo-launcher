@@ -16,7 +16,7 @@ npx wrangler d1 execute $DB_NAME --local --command="SELECT * FROM action_logs"
 
 echo ""
 echo "========================================================"
-echo " Local Secrets Setup (.dev.vars / .env)"
+echo " Local Secrets Setup (.env)"
 echo "========================================================"
 echo "Configures ADMIN_KEY, DROPLET_SSH_PUBLIC_KEY, and DROPLET_SSH_PRIVATE_KEY."
 echo "Tip: Run ./dev-create-ssh-key.sh beforehand to generate local keys."
@@ -85,16 +85,16 @@ set_local_secret() {
         user_val="$(cat "${user_val}")"
     fi
 
-    write_env_var ".dev.vars" "${key_name}" "${user_val}"
-    if [ -f ".env" ]; then
-        write_env_var ".env" "${key_name}" "${user_val}"
-    fi
+    # write_env_var ".dev.vars" "${key_name}" "${user_val}"
+    # if [ -f ".env" ]; then
+    #     write_env_var ".env" "${key_name}" "${user_val}"
+    # fi
     echo "Successfully saved ${key_name}."
 }
 
-if [ ! -f ".dev.vars" ] && [ -f ".env" ]; then
-    cp .env .dev.vars
-fi
+# if [ ! -f ".dev.vars" ] && [ -f ".env" ]; then
+#     cp .env .dev.vars
+# fi
 
 DEFAULT_PUB_KEY=""
 DEFAULT_PRIV_KEY=""
