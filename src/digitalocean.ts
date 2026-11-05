@@ -1,6 +1,7 @@
 import { DigitalOceanMockService } from './digitalocean.mock';
-import { DigitalOceanProdService } from './digitalocean.prod';
-import { isDevelopment } from './helper';
+import { DEFAULT_FIREWALL_INBOUND_RULES, DigitalOceanProdService } from './digitalocean.prod';
+import { buildFirewallInboundRules, isDevelopment } from './helper';
+import projects from './projects.json';
 import { DropletInfo, Env, IDigitalOceanService as BaseIDigitalOceanService } from './types';
 
 export { isDevelopment };
@@ -58,6 +59,11 @@ export function isRealApiEnabled(env: Env): boolean {
  * ```
  */
 export function getDigitalOceanService(env: Env, requestUrl?: string): IDigitalOceanService {
+	const inboundRules = buildFirewallInboundRules(
+		DEFAULT_FIREWALL_INBOUND_RULES,
+		(env as any).DO_FIREWALL_EXTRA_INBOUND_PORTS,
+		projects,
+	);
 	const config = {
 		region: env.DO_REGION,
 		size: env.DO_SIZE,
@@ -65,6 +71,7 @@ export function getDigitalOceanService(env: Env, requestUrl?: string): IDigitalO
 		sshPublicKey: env.DROPLET_SSH_PUBLIC_KEY,
 		firewallName: env.DO_FIREWALL_NAME,
 		firewallTag: env.DO_FIREWALL_TAG,
+		inboundRules,
 	};
 	if (isRealApiEnabled(env)) {
 		return new DigitalOceanProdService(env.DO_API_KEY, config);

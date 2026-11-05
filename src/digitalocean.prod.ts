@@ -1,10 +1,12 @@
 import { DropletInfo, IDigitalOceanService } from './types';
 import { DigitalOceanApiError } from './digitalocean-error';
 import {
+	areInboundRulesEqual,
 	buildDropletTags,
 	buildStartupScript,
 	DEFAULT_FIREWALL_NAME,
 	DEFAULT_FIREWALL_TAG,
+	FirewallInboundRule,
 	normalizePublicKey,
 } from './helper';
 
@@ -15,6 +17,7 @@ export interface DigitalOceanConfig {
 	sshPublicKey?: string;
 	firewallName?: string;
 	firewallTag?: string;
+	inboundRules?: FirewallInboundRule[];
 }
 
 export const DEFAULT_FIREWALL_INBOUND_RULES = [
@@ -109,6 +112,7 @@ export class DigitalOceanProdService implements IDigitalOceanService {
 	private readonly sshPublicKey?: string;
 	private readonly firewallName: string;
 	private readonly firewallTag: string;
+	private readonly inboundRules: FirewallInboundRule[];
 	private cachedSshKeyId?: number | string;
 	private cachedFirewallId?: string;
 
@@ -116,7 +120,7 @@ export class DigitalOceanProdService implements IDigitalOceanService {
 	 * Initializes the DigitalOcean production API service.
 	 *
 	 * @param apiKey - DigitalOcean personal access token
-	 * @param config - Optional droplet configuration overrides for region, size, image, sshPublicKey, firewallName, and firewallTag
+	 * @param config - Optional droplet configuration overrides for region, size, image, sshPublicKey, firewallName, firewallTag, and inboundRules
 	 *
 	 * @example
 	 * ```ts
@@ -140,6 +144,7 @@ export class DigitalOceanProdService implements IDigitalOceanService {
 		this.sshPublicKey = config?.sshPublicKey;
 		this.firewallName = config?.firewallName || DEFAULT_FIREWALL_NAME;
 		this.firewallTag = config?.firewallTag || DEFAULT_FIREWALL_TAG;
+		this.inboundRules = config?.inboundRules || DEFAULT_FIREWALL_INBOUND_RULES;
 	}
 
 	private get headers(): HeadersInit {
@@ -293,14 +298,14 @@ export class DigitalOceanProdService implements IDigitalOceanService {
 			};
 			const existing = data.firewalls?.find((fw) => fw.name === this.firewallName);
 			if (existing) {
-				// Rule count differs from the code defaults -> push the defaults (PUT replaces rules, so keep tags/droplets)
-				if ((existing.inbound_rules?.length ?? 0) !== DEFAULT_FIREWALL_INBOUND_RULES.length) {
+				// Inbound rules differ from desired configuration -> push updates (PUT replaces rules, so keep tags/droplets)
+				if (!areInboundRulesEqual(existing.inbound_rules as any, this.inboundRules)) {
 					const updateRes = await fetch(`${this.baseUrl}/firewalls/${existing.id}`, {
 						method: 'PUT',
 						headers: this.headers,
 						body: JSON.stringify({
 							name: existing.name,
-							inbound_rules: DEFAULT_FIREWALL_INBOUND_RULES,
+							inbound_rules: this.inboundRules,
 							outbound_rules: DEFAULT_FIREWALL_OUTBOUND_RULES,
 							droplet_ids: existing.droplet_ids ?? [],
 							tags: Array.from(new Set([...(existing.tags ?? []), this.firewallTag])),
@@ -338,7 +343,7 @@ export class DigitalOceanProdService implements IDigitalOceanService {
 			headers: this.headers,
 			body: JSON.stringify({
 				name: this.firewallName,
-				inbound_rules: DEFAULT_FIREWALL_INBOUND_RULES,
+				inbound_rules: this.inboundRules,
 				outbound_rules: DEFAULT_FIREWALL_OUTBOUND_RULES,
 				tags: [this.firewallTag],
 			}),

@@ -40,6 +40,8 @@
 
 - [ ] limit instances count
 
+- [ ] rename `src/helper.ts` `checkHealth` -> `checkHealthSocket` and move to `src/healthcheck.ts`
+
 - [ ] set REPO_URL and DROPLET_IP env in created demo droplet
 
 - [ ] make projects.json as secret. use `npx wrangler secret put PROJECTS_JSON < projects.json`

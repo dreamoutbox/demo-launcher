@@ -14,9 +14,13 @@ import { DigitalOceanProdService, DEFAULT_FIREWALL_INBOUND_RULES, DEFAULT_FIREWA
 import { DigitalOceanApiError } from '../src/digitalocean-error';
 import { getDigitalOceanService, isRealApiEnabled } from '../src/digitalocean';
 import {
+	areInboundRulesEqual,
 	buildDropletTags,
+	buildFirewallInboundRules,
 	buildStartupScript,
 	isValidGitBranch,
+	isValidPortOrRange,
+	parsePortList,
 	DEFAULT_FIREWALL_NAME,
 	DEFAULT_FIREWALL_TAG,
 	normalizePublicKey,
@@ -874,6 +878,79 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 
 		expect(fwId).toBe('fw-race-resolved');
 		expect(listAttempt).toBe(2);
+	});
+
+	it('17b. Port parsing and validation helper functions', () => {
+		expect(isValidPortOrRange('80')).toBe(true);
+		expect(isValidPortOrRange('5432')).toBe(true);
+		expect(isValidPortOrRange('8000-8100')).toBe(true);
+		expect(isValidPortOrRange('1-65535')).toBe(true);
+		expect(isValidPortOrRange('')).toBe(false);
+		expect(isValidPortOrRange('0')).toBe(false);
+		expect(isValidPortOrRange('70000')).toBe(false);
+		expect(isValidPortOrRange('8100-8000')).toBe(false);
+		expect(isValidPortOrRange('abc')).toBe(false);
+		expect(isValidPortOrRange('80; rm -rf /')).toBe(false);
+
+		expect(parsePortList('5432, 8000-8100, 5432')).toEqual(['5432', '8000-8100']);
+		expect(parsePortList(['3000', '5432', '3000'])).toEqual(['3000', '5432']);
+		expect(parsePortList(null)).toEqual([]);
+		expect(() => parsePortList('80, invalid-port')).toThrow('Invalid port or port range');
+	});
+
+	it('17c. buildFirewallInboundRules unions default, env, and project ports with deduplication', () => {
+		const rules = buildFirewallInboundRules(
+			DEFAULT_FIREWALL_INBOUND_RULES,
+			'5432,80',
+			[{ firewallPorts: ['8081', '5432'] }, { firewallPorts: ['9001-9010'] }],
+		);
+
+		const tcpPorts = rules.filter((r) => r.protocol === 'tcp').map((r) => r.ports);
+		expect(tcpPorts).toContain('5432');
+		expect(tcpPorts).toContain('8081');
+		expect(tcpPorts).toContain('9001-9010');
+		expect(tcpPorts.filter((p) => p === '80').length).toBe(1);
+		expect(tcpPorts.filter((p) => p === '5432').length).toBe(1);
+
+		expect(areInboundRulesEqual(rules, rules)).toBe(true);
+		expect(areInboundRulesEqual(rules, DEFAULT_FIREWALL_INBOUND_RULES)).toBe(false);
+	});
+
+	it('17d. ensureFirewall should update firewall rules via PUT when ports drift, and skip PUT when identical', async () => {
+		let putPayload: any = null;
+		let putCount = 0;
+
+		vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+			if (typeof url === 'string' && url.includes('/firewalls?per_page=200') && (!init || init.method === 'GET')) {
+				return new Response(
+					JSON.stringify({
+						firewalls: [
+							{
+								id: 'fw-drift-id',
+								name: 'demo-launcher-fw',
+								tags: ['demo-launcher-fw'],
+								inbound_rules: DEFAULT_FIREWALL_INBOUND_RULES,
+							},
+						],
+					}),
+					{ status: 200 },
+				);
+			}
+			if (typeof url === 'string' && url.includes('/firewalls/fw-drift-id') && init?.method === 'PUT') {
+				putCount++;
+				putPayload = JSON.parse(init.body as string);
+				return new Response(JSON.stringify({ firewall: { id: 'fw-drift-id' } }), { status: 200 });
+			}
+			return new Response('Not found', { status: 404 });
+		});
+
+		const customRules = buildFirewallInboundRules(DEFAULT_FIREWALL_INBOUND_RULES, '5432', []);
+		const serviceWithExtra = new DigitalOceanProdService('test-key', { inboundRules: customRules });
+		const fwId = await serviceWithExtra.ensureFirewall();
+
+		expect(fwId).toBe('fw-drift-id');
+		expect(putCount).toBe(1);
+		expect(putPayload.inbound_rules.some((r: any) => r.ports === '5432')).toBe(true);
 	});
 
 	it('18. getDigitalOceanService should apply DO_FIREWALL_NAME and DO_FIREWALL_TAG overrides', async () => {

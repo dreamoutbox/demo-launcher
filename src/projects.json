@@ -27,6 +27,7 @@
     "healthcheckPort": "8080",
     "healthcheckPath": "/",
     "appPort": "8080",
+    "firewallPorts": ["8081"],
     "size": "s-1vcpu-1gb"
   },
   {

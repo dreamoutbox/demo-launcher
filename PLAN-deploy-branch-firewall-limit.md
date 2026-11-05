@@ -23,14 +23,14 @@ Build/test: `pnpm test` (vitest, `test/*.spec.ts`), `pnpm types` after `wrangler
   - [x] Update existing `createDroplet` callers in tests; add tests: script contains branch flag, no flag when unset, invalid branch rejected.
 - Done when: `pnpm test` passes; test asserts the user-data payload sent to the DO API contains the branch clone.
 
-### Phase 2: Extend firewall inbound ports (global env + per-project) [STATUS: TODO]
+### Phase 2: Extend firewall inbound ports (global env + per-project) [STATUS: DONE]
 - Goal: extra inbound ports configurable globally via env and per project via `projects.json`, with correct rule drift detection.
 - Tasks:
-  - [ ] Add optional `firewallPorts` (array of port/range strings, e.g. `["5432", "8000-8100"]`) to project entries in `src/projects.json`; add an example to one project.
-  - [ ] Add optional env `DO_FIREWALL_EXTRA_INBOUND_PORTS` (comma list) in `wrangler.jsonc` vars (commented example) and `TEMPLATE.env`; run `pnpm types`.
-  - [ ] Add helper in `src/helper.ts` to parse/validate port lists (reject non-numeric, out of 1-65535, reversed range) and build the final inbound rule list: defaults + env extras + the ports of every project in `projects.json` (union, deduped, TCP, `0.0.0.0/0` + `::/0`; cap total at DO's 50-rule limit).
-  - [ ] Pass computed rules into `DigitalOceanProdService` config. Replace the count-only drift check in `ensureFirewall()` with a comparison of the sorted protocol/port set so changes of equal count are applied.
-  - [ ] Tests: parser (valid, invalid, dedupe), union of defaults/env/project ports, PUT issued when ports differ, none when identical.
+  - [x] Add optional `firewallPorts` (array of port/range strings, e.g. `["5432", "8000-8100"]`) to project entries in `src/projects.json`; add an example to one project.
+  - [x] Add optional env `DO_FIREWALL_EXTRA_INBOUND_PORTS` (comma list) in `wrangler.jsonc` vars (commented example) and `TEMPLATE.env`; run `pnpm types`.
+  - [x] Add helper in `src/helper.ts` to parse/validate port lists (reject non-numeric, out of 1-65535, reversed range) and build the final inbound rule list: defaults + env extras + the ports of every project in `projects.json` (union, deduped, TCP, `0.0.0.0/0` + `::/0`; cap total at DO's 50-rule limit).
+  - [x] Pass computed rules into `DigitalOceanProdService` config. Replace the count-only drift check in `ensureFirewall()` with a comparison of the sorted protocol/port set so changes of equal count are applied.
+  - [x] Tests: parser (valid, invalid, dedupe), union of defaults/env/project ports, PUT issued when ports differ, none when identical.
 - Done when: `pnpm test` passes; adding a port in `projects.json` or the env shows up in the firewall create/update payload.
 
 ### Phase 3: Single global Durable Object [STATUS: TODO]

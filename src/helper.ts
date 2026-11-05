@@ -133,6 +133,168 @@ export function normalizePublicKey(key: string): string {
 
 export const DEFAULT_FIREWALL_NAME = 'demo-launcher-fw';
 export const DEFAULT_FIREWALL_TAG = 'demo-launcher-fw';
+export const MAX_FIREWALL_INBOUND_RULES = 50;
+
+export interface FirewallInboundRule {
+    protocol: string;
+    ports: string;
+    sources: {
+        addresses: string[];
+    };
+}
+
+/**
+ * Validates whether a port string is a valid single port (1-65535) or a valid port range (start-end).
+ *
+ * @param port - Port or range string to validate (e.g. '5432' or '8000-8100')
+ * @returns True if the port string is numeric, within 1-65535, and ranges are not reversed
+ *
+ * @example
+ * ```ts
+ * isValidPortOrRange('8080'); // true
+ * isValidPortOrRange('8000-8100'); // true
+ * isValidPortOrRange('9000-8000'); // false
+ * ```
+ */
+export function isValidPortOrRange(port: string): boolean {
+    const trimmed = port.trim();
+    if (trimmed === '') {
+        return false;
+    }
+    if (/^\d+$/.test(trimmed)) {
+        const num = Number.parseInt(trimmed, 10);
+        return num >= 1 && num <= 65535;
+    }
+    const rangeMatch = /^(\d+)-(\d+)$/.exec(trimmed);
+    if (!rangeMatch) {
+        return false;
+    }
+    const start = Number.parseInt(rangeMatch[1], 10);
+    const end = Number.parseInt(rangeMatch[2], 10);
+    return start >= 1 && end <= 65535 && start <= end;
+}
+
+/**
+ * Parses and validates a list or comma-separated string of port/range specifications.
+ * Throws an Error if any entry is invalid.
+ *
+ * @param input - Comma-separated string or array of port/range strings
+ * @returns Normalized array of unique valid port/range strings
+ *
+ * @example
+ * ```ts
+ * parsePortList('5432, 8000-8100'); // ['5432', '8000-8100']
+ * parsePortList(['3000', '5432']); // ['3000', '5432']
+ * ```
+ */
+export function parsePortList(input?: string | string[] | null): string[] {
+    if (!input) {
+        return [];
+    }
+    const rawList = Array.isArray(input) ? input : input.split(',');
+    const result: string[] = [];
+    for (const raw of rawList) {
+        const trimmed = raw.trim();
+        if (!trimmed) {
+            continue;
+        }
+        if (!isValidPortOrRange(trimmed)) {
+            throw new Error(`Invalid port or port range: "${trimmed}"`);
+        }
+        if (!result.includes(trimmed)) {
+            result.push(trimmed);
+        }
+    }
+    return result;
+}
+
+/**
+ * Builds the complete list of firewall inbound rules by combining defaults, global extra ports from env,
+ * and per-project ports defined in projects.json. Deduplicates TCP rules and caps the total at DigitalOcean's 50-rule limit.
+ *
+ * @param defaultRules - Baseline default firewall inbound rules
+ * @param extraPortsEnv - Comma-separated port string from DO_FIREWALL_EXTRA_INBOUND_PORTS env
+ * @param projectEntries - Array of project objects containing optional firewallPorts
+ * @returns Array of deduplicated FirewallInboundRule objects
+ *
+ * @example
+ * ```ts
+ * const rules = buildFirewallInboundRules(DEFAULT_FIREWALL_INBOUND_RULES, '5432', [{ firewallPorts: ['8081'] }]);
+ * ```
+ */
+export function buildFirewallInboundRules(
+    defaultRules: FirewallInboundRule[],
+    extraPortsEnv?: string | null,
+    projectEntries?: Array<{ firewallPorts?: string[] }> | null,
+): FirewallInboundRule[] {
+    const rules: FirewallInboundRule[] = defaultRules.map((r) => ({
+        protocol: r.protocol,
+        ports: r.ports,
+        sources: { addresses: [...r.sources.addresses] },
+    }));
+
+    const existingTcpPorts = new Set(
+        rules.filter((r) => r.protocol.toLowerCase() === 'tcp').map((r) => r.ports),
+    );
+
+    const extraPorts = parsePortList(extraPortsEnv);
+    const projectPorts: string[] = [];
+    if (projectEntries) {
+        for (const p of projectEntries) {
+            if (p.firewallPorts) {
+                projectPorts.push(...parsePortList(p.firewallPorts));
+            }
+        }
+    }
+
+    const allExtra = Array.from(new Set([...extraPorts, ...projectPorts]));
+    for (const port of allExtra) {
+        if (!existingTcpPorts.has(port)) {
+            existingTcpPorts.add(port);
+            rules.push({
+                protocol: 'tcp',
+                ports: port,
+                sources: {
+                    addresses: ['0.0.0.0/0', '::/0'],
+                },
+            });
+        }
+    }
+
+    if (rules.length > MAX_FIREWALL_INBOUND_RULES) {
+        throw new Error(
+            `Total firewall inbound rules count (${rules.length}) exceeds DigitalOcean maximum limit of ${MAX_FIREWALL_INBOUND_RULES}`,
+        );
+    }
+
+    return rules;
+}
+
+/**
+ * Compares two lists of firewall inbound rules by their sorted protocol:ports signature.
+ *
+ * @param a - First list of inbound rules
+ * @param b - Second list of inbound rules
+ * @returns True if both lists have the exact same protocols and ports
+ *
+ * @example
+ * ```ts
+ * areInboundRulesEqual(existingRules, desiredRules);
+ * ```
+ */
+export function areInboundRulesEqual(
+    a?: Array<{ protocol?: string; ports?: string | number }>,
+    b?: Array<{ protocol?: string; ports?: string | number }>,
+): boolean {
+    const normalize = (list?: Array<{ protocol?: string; ports?: string | number }>) => {
+        if (!list) return '';
+        return list
+            .map((r) => `${String(r.protocol || '').toLowerCase()}:${String(r.ports || '')}`)
+            .sort()
+            .join('|');
+    };
+    return normalize(a) === normalize(b);
+}
 
 /**
  * Builds the tag that identifies a single launch attempt.
