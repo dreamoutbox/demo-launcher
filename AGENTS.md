@@ -65,6 +65,8 @@ If the application uses Durable Objects or Workflows, refer to the relevant best
 
 - write helper functions in `src/helper.ts`
 
+- Cron triggers do not run on a schedule in `wrangler dev`. Trigger them manually via `./dev-trigger-cron.sh` (`/cdn-cgi/handler/scheduled`) or `./dev-trigger-cron-2-seconds.sh` (`/api/cron-cleanup`).
+
 ## Frontend Styling
 
 - Keep frontend styling plain, clean, and minimal. No fancy CSS (no glassmorphism, gradients, glow effects, or dark themes). Match the simple aesthetic of `public/index.html` and `public/main.css`.
