@@ -95,13 +95,6 @@ export default {
 		const url = new URL(req.url);
 		const { pathname, searchParams } = url;
 
-		if (pathname === '/api/beverages') {
-			const { results } = await env.mydb.prepare('SELECT * FROM Customers WHERE CompanyName = ?')
-				.bind('Bs Beverages')
-				.run();
-			return Response.json(results);
-		}
-
 		// GET /api/projects -> List available projects and their current live demo status + uptime
 		if (pathname === '/api/projects' && req.method === 'GET') {
 			const now = Date.now();
