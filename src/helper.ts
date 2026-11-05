@@ -133,6 +133,7 @@ export function normalizePublicKey(key: string): string {
 
 export const DEFAULT_FIREWALL_NAME = 'demo-launcher-fw';
 export const DEFAULT_FIREWALL_TAG = 'demo-launcher-fw';
+export const GLOBAL_LAUNCHER_NAME = 'global-launcher';
 export const MAX_FIREWALL_INBOUND_RULES = 50;
 
 export interface FirewallInboundRule {

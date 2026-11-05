@@ -33,13 +33,13 @@ Build/test: `pnpm test` (vitest, `test/*.spec.ts`), `pnpm types` after `wrangler
   - [x] Tests: parser (valid, invalid, dedupe), union of defaults/env/project ports, PUT issued when ports differ, none when identical.
 - Done when: `pnpm test` passes; adding a port in `projects.json` or the env shows up in the firewall create/update payload.
 
-### Phase 3: Single global Durable Object [STATUS: TODO]
+### Phase 3: Single global Durable Object [STATUS: DONE]
 - Goal: replace per-project `ProjectLauncher` instances with one global instance, enabling cross-project serialization.
 - Tasks:
-  - [ ] Add a constant (e.g. `GLOBAL_LAUNCHER_NAME`) in `src/helper.ts`; use `env.LAUNCHER.idFromName(GLOBAL_LAUNCHER_NAME)` at the call site in `src/index.ts` (and any test/helper using `idFromName(projectId)`).
-  - [ ] Keep the same class and binding (no wrangler migration needed): state is in D1 keyed by `project_id`, not in DO storage. Verify no DO storage is used.
-  - [ ] Existing in-memory `Mutex` now serializes all launches/polls across projects. Confirm `pollAndHealth` does not hold the mutex during long waits (health checks) so one slow project does not block others; narrow the lock scope if it does.
-  - [ ] Update class docstring ("one instance per project") and tests (concurrent launch of different projects, same project still creates one droplet).
+  - [x] Add a constant (e.g. `GLOBAL_LAUNCHER_NAME`) in `src/helper.ts`; use `env.LAUNCHER.idFromName(GLOBAL_LAUNCHER_NAME)` at the call site in `src/index.ts` (and any test/helper using `idFromName(projectId)`).
+  - [x] Keep the same class and binding (no wrangler migration needed): state is in D1 keyed by `project_id`, not in DO storage. Verify no DO storage is used.
+  - [x] Existing in-memory `Mutex` now serializes all launches/polls across projects. Confirm `pollAndHealth` does not hold the mutex during long waits (health checks) so one slow project does not block others; narrow the lock scope if it does.
+  - [x] Update class docstring ("one instance per project") and tests (concurrent launch of different projects, same project still creates one droplet).
 - Done when: `pnpm test` passes; two different projects launched concurrently both succeed via the same DO instance.
 
 ### Phase 4: Limit concurrent instances [STATUS: TODO]

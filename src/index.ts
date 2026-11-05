@@ -1,6 +1,6 @@
 import projects from './projects.json';
 import { getDigitalOceanService } from './digitalocean';
-import { checkHealth, createTurnstileErrorResponse, formatUptime, getMaxDemoTimeMs } from './helper';
+import { checkHealth, createTurnstileErrorResponse, formatUptime, getMaxDemoTimeMs, GLOBAL_LAUNCHER_NAME } from './helper';
 import { ActionStatus, ActionType, DemoStatus, Env, LaunchPhase, QueueMessage } from './types';
 import { verifyTurnstileToken, TurnstileStatus } from './turnstile';
 import { extractClientInfo, getActionLogs, isAdminAuthorized, recordActionLog } from './action-log';
@@ -410,7 +410,7 @@ export default {
 	async queue(batch, env, ctx): Promise<void> {
 		for (const message of batch.messages) {
 			const { projectId, phase, attemptId } = message.body;
-			const stub = env.LAUNCHER.get(env.LAUNCHER.idFromName(projectId));
+			const stub = env.LAUNCHER.get(env.LAUNCHER.idFromName(GLOBAL_LAUNCHER_NAME));
 
 			try {
 				if (phase === LaunchPhase.POLL_HEALTH) {

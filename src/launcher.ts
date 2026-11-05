@@ -27,12 +27,13 @@ interface LaunchClaim {
 }
 
 /**
- * One Durable Object instance per project, identified by project ID.
- * Coordinates project launches and serializes concurrent requests using an instance mutex.
+ * Global Durable Object instance that coordinates demo launches across all projects.
+ * Serializes launch attempts and updates using an in-memory Mutex while persisting
+ * lifecycle state in D1 (`project_demos`).
  *
  * The launch is split into two queue phases:
  * 1. `CREATE` creates the droplet and persists its id immediately.
- * 2. `POLL_HEALTH` resolves the public IP and runs the health check.
+ * 2. `POLL_HEALTH` resolves the public IP and marks the demo RUNNING.
  *
  * A redelivered queue message is the recovery mechanism: `launch()` resumes a
  * LAUNCHING row and finds an already-created droplet by its `launch-<attemptId>` tag.

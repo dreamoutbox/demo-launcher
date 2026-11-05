@@ -271,6 +271,47 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 		expect(createDropletSpy).toHaveBeenCalledTimes(1);
 	});
 
+	it('3b. Single global Durable Object should process concurrent launches of different projects', async () => {
+		const createDropletSpy = vi.spyOn(DigitalOceanMockService.prototype, 'createDroplet');
+		const projA = projects[0];
+		const projB = projects[1];
+
+		const batch = createMessageBatch<QueueMessage>('demo-launch-queue', [
+			{
+				id: 'msg-diff-1',
+				timestamp: new Date(),
+				body: { projectId: projA.id },
+				attempts: 1,
+			},
+			{
+				id: 'msg-diff-2',
+				timestamp: new Date(),
+				body: { projectId: projB.id },
+				attempts: 1,
+			},
+		]);
+
+		const ctx = createExecutionContext();
+		await worker.queue(batch, testEnv, ctx);
+		const result = await getQueueResult(batch, ctx);
+
+		expect(result.explicitAcks).toEqual(['msg-diff-1', 'msg-diff-2']);
+		expect(createDropletSpy).toHaveBeenCalledWith(
+			projA.id,
+			projA.repoUrl,
+			projA.size,
+			expect.any(String),
+			projA.branch,
+		);
+		expect(createDropletSpy).toHaveBeenCalledWith(
+			projB.id,
+			projB.repoUrl,
+			projB.size,
+			expect.any(String),
+			projB.branch,
+		);
+	});
+
 	it('4. Scheduled CRON should delete expired droplets (> 1 hour) and reset D1 status to STOPPED', async () => {
 		const deleteDropletSpy = vi.spyOn(DigitalOceanMockService.prototype, 'deleteDroplet');
 
