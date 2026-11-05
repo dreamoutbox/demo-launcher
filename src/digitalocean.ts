@@ -1,9 +1,29 @@
 import { DigitalOceanMockService } from './digitalocean.mock';
 import { DigitalOceanProdService } from './digitalocean.prod';
 import { isDevelopment } from './helper';
-import { Env, IDigitalOceanService } from './types';
+import { DropletInfo, Env, IDigitalOceanService as BaseIDigitalOceanService } from './types';
 
 export { isDevelopment };
+
+export interface IDigitalOceanService extends BaseIDigitalOceanService {
+	/**
+	 * Creates a droplet and returns as soon as DigitalOcean accepts the request.
+	 * The returned `ip` is empty until the droplet is polled with `getDroplet`.
+	 *
+	 * @param projectId - Project ID
+	 * @param repoUrl - Repository git URL
+	 * @param size - Optional droplet machine size override
+	 * @param attemptId - Optional unique launch attempt identifier
+	 * @param branch - Optional git branch name to check out
+	 */
+	createDroplet(
+		projectId: string,
+		repoUrl: string,
+		size?: string,
+		attemptId?: string,
+		branch?: string,
+	): Promise<DropletInfo>;
+}
 
 /**
  * Checks whether the real DigitalOcean API should be used instead of mock.

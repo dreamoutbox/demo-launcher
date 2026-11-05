@@ -15,12 +15,12 @@ Build/test: `pnpm test` (vitest, `test/*.spec.ts`), `pnpm types` after `wrangler
 
 ## Phases
 
-### Phase 1: Clone the configured branch [STATUS: TODO]
+### Phase 1: Clone the configured branch [STATUS: DONE]
 - Goal: droplets check out `project.branch` instead of the repo default.
 - Tasks:
-  - [ ] Add optional `branch` param to `buildStartupScript` in `src/helper.ts`; use `git clone --branch <branch> --single-branch`; omit flag when unset. Validate/quote the branch value (allow `[A-Za-z0-9._/-]` only) to avoid shell injection.
-  - [ ] Thread `branch` through `IDigitalOceanService.createDroplet` (`src/types` interface lives in `src/digitalocean.ts`), prod and mock services, and the call in `src/launcher.ts`.
-  - [ ] Update existing `createDroplet` callers in tests; add tests: script contains branch flag, no flag when unset, invalid branch rejected.
+  - [x] Add optional `branch` param to `buildStartupScript` in `src/helper.ts`; use `git clone --branch <branch> --single-branch`; omit flag when unset. Validate/quote the branch value (allow `[A-Za-z0-9._/-]` only) to avoid shell injection.
+  - [x] Thread `branch` through `IDigitalOceanService.createDroplet` (`src/types` interface lives in `src/digitalocean.ts`), prod and mock services, and the call in `src/launcher.ts`.
+  - [x] Update existing `createDroplet` callers in tests; add tests: script contains branch flag, no flag when unset, invalid branch rejected.
 - Done when: `pnpm test` passes; test asserts the user-data payload sent to the DO API contains the branch clone.
 
 ### Phase 2: Extend firewall inbound ports (global env + per-project) [STATUS: TODO]

@@ -389,13 +389,14 @@ export class DigitalOceanProdService implements IDigitalOceanService {
 	 * @param repoUrl - Git repository cloned by the startup script
 	 * @param size - Optional per-project size override
 	 * @param attemptId - Optional launch attempt identifier added as a tag
+	 * @param branch - Optional git branch name to check out
 	 * @returns Droplet id, empty IP, status, and tags
 	 *
 	 * @example
-	 * const droplet = await service.createDroplet('go-pos', repoUrl, 's-1vcpu-1gb', attemptId);
+	 * const droplet = await service.createDroplet('go-pos', repoUrl, 's-1vcpu-1gb', attemptId, 'main');
 	 */
-	async createDroplet(projectId: string, repoUrl: string, size?: string, attemptId?: string): Promise<DropletInfo> {
-		const userData = buildStartupScript(repoUrl);
+	async createDroplet(projectId: string, repoUrl: string, size?: string, attemptId?: string, branch?: string): Promise<DropletInfo> {
+		const userData = buildStartupScript(repoUrl, branch);
 
 		// Ensure firewall exists and is tagged before provisioning droplet
 		await this.ensureFirewall();

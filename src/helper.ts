@@ -36,22 +36,50 @@ export function formatUptime(ms: number): string {
 }
 
 /**
+ * Validates a git branch name to contain only safe characters: letters, digits, dots,
+ * underscores, slashes, and hyphens, preventing shell and git flag injection.
+ *
+ * @param branch - The branch name to validate
+ * @returns True if the branch name is valid and safe against shell injection
+ *
+ * @example
+ * ```ts
+ * isValidGitBranch('main'); // true
+ * isValidGitBranch('feature/add-login'); // true
+ * isValidGitBranch('; rm -rf /'); // false
+ * ```
+ */
+export function isValidGitBranch(branch: string): boolean {
+    return /^[A-Za-z0-9._/][A-Za-z0-9._/-]*$/.test(branch);
+}
+
+/**
  * Generates the startup bash script (Cloud-Init user_data)
- * Installs Nginx, clones the target repo, and executes demo-launcher-entrypoint.sh,
- * piping command outputs to ./demo-launcher/startup.log.
+ * Installs Nginx, clones the target repo (optionally targeting a specific branch),
+ * and executes demo-launcher-entrypoint.sh, piping command outputs to ./demo-launcher/startup.log.
  *
  * @param repoUrl - Git repository URL to clone and run
+ * @param branch - Optional git branch name to check out
  * @returns Bash script string used as cloud-init user_data
  *
  * @example
  * ```ts
- * const script = buildStartupScript('https://github.com/dreamoutbox/demo-launcher-simple-project');
+ * const script = buildStartupScript('https://github.com/dreamoutbox/demo-launcher-simple-project', 'main');
  * ```
  */
-export function buildStartupScript(repoUrl: string): string {
+export function buildStartupScript(repoUrl: string, branch?: string): string {
     // # nginx
     // #systemctl enable nginx
     // #systemctl start nginx
+
+    let cloneCmd = `git clone "${repoUrl}" /opt/demo-app`;
+    if (branch !== undefined && branch.trim() !== '') {
+        const trimmedBranch = branch.trim();
+        if (!isValidGitBranch(trimmedBranch)) {
+            throw new Error(`Invalid git branch name: ${branch}`);
+        }
+        cloneCmd = `git clone --branch "${trimmedBranch}" --single-branch "${repoUrl}" /opt/demo-app`;
+    }
 
     return `#!/bin/bash
 set -euo pipefail
@@ -66,7 +94,7 @@ apt-get install -y git curl
 
 # 2. Pull Git Project
 mkdir -p /opt/demo-app
-git clone "${repoUrl}" /opt/demo-app
+${cloneCmd}
 cd /opt/demo-app
 
 # 3. Execute demo-launcher-entrypoint.sh if present

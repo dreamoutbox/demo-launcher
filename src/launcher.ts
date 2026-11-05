@@ -85,7 +85,13 @@ export class ProjectLauncher extends DurableObject<Env> {
 			}
 
 			console.log(`[DO] Launching DigitalOcean droplet for "${projectId}"...`);
-			const droplet = await doService.createDroplet(project.id, project.repoUrl, project.size, claim.attemptId);
+			const droplet = await doService.createDroplet(
+				project.id,
+				project.repoUrl,
+				project.size,
+				claim.attemptId,
+				project.branch,
+			);
 
 			if (!(await this.saveDroplet(projectId, claim.attemptId, droplet))) {
 				// The attempt was stopped or superseded while the create request was in flight.

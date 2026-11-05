@@ -20,8 +20,8 @@ export class DigitalOceanMockService implements IDigitalOceanService {
 		console.log('[DO-MOCK] Initialized DigitalOcean Mock Service');
 	}
 
-	async createDroplet(projectId: string, repoUrl: string, _size?: string, attemptId?: string): Promise<DropletInfo> {
-		const userData = buildStartupScript(repoUrl);
+	async createDroplet(projectId: string, repoUrl: string, _size?: string, attemptId?: string, branch?: string): Promise<DropletInfo> {
+		const userData = buildStartupScript(repoUrl, branch);
 		console.log(`[DO-MOCK] Ensuring firewall (mock) with tag: ${this.firewallTag}`);
 		console.log(`[DO-MOCK] Creating droplet for project "${projectId}"...`);
 		console.log(`[DO-MOCK] Startup Script (Nginx + Git Pull + Entrypoint):\n${userData}`);

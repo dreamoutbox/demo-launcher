@@ -16,6 +16,7 @@ import { getDigitalOceanService, isRealApiEnabled } from '../src/digitalocean';
 import {
 	buildDropletTags,
 	buildStartupScript,
+	isValidGitBranch,
 	DEFAULT_FIREWALL_NAME,
 	DEFAULT_FIREWALL_TAG,
 	normalizePublicKey,
@@ -177,6 +178,7 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 			testProject.repoUrl,
 			testProject.size,
 			expect.any(String),
+			testProject.branch,
 		);
 
 		const launchedRow = await testEnv.mydb
@@ -363,6 +365,49 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 		expect(script).toContain('mkdir -p ./demo-launcher');
 		expect(script).toContain('} 2>&1 | tee ./demo-launcher/startup.log');
 		expect(script).toContain('git clone "https://github.com/example/repo.git" /opt/demo-app');
+	});
+
+	it('6b. buildStartupScript and isValidGitBranch should support branch checkout and reject unsafe names', () => {
+		expect(isValidGitBranch('main')).toBe(true);
+		expect(isValidGitBranch('feature/my-branch_1.0')).toBe(true);
+		expect(isValidGitBranch('v1.2.3')).toBe(true);
+		expect(isValidGitBranch('; rm -rf /')).toBe(false);
+		expect(isValidGitBranch('--upload-pack')).toBe(false);
+		expect(isValidGitBranch('feat$(whoami)')).toBe(false);
+		expect(isValidGitBranch('feat`whoami`')).toBe(false);
+
+		const branchScript = buildStartupScript('https://github.com/example/repo.git', 'feature/login');
+		expect(branchScript).toContain('git clone --branch "feature/login" --single-branch "https://github.com/example/repo.git" /opt/demo-app');
+
+		const unsetBranchScript = buildStartupScript('https://github.com/example/repo.git');
+		expect(unsetBranchScript).toContain('git clone "https://github.com/example/repo.git" /opt/demo-app');
+
+		expect(() => buildStartupScript('https://github.com/example/repo.git', 'main; rm -rf /')).toThrow('Invalid git branch name');
+	});
+
+	it('6c. DigitalOceanProdService.createDroplet should pass branch to startup script in user_data', async () => {
+		const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+			if (typeof url === 'string' && url.includes('/firewalls') && (!init || init.method === 'GET')) {
+				return new Response(JSON.stringify({ firewalls: [{ id: 'fw-1', name: 'demo-launcher-fw', tags: ['demo-launcher-fw'] }] }), { status: 200 });
+			}
+			if (typeof url === 'string' && url.includes('/droplets') && init?.method === 'POST') {
+				return new Response(JSON.stringify({ droplet: { id: 888888 } }), { status: 200 });
+			}
+			return new Response(JSON.stringify({ droplet: { id: 888888, status: 'active', networks: { v4: [] } } }), { status: 200 });
+		});
+
+		const service = new DigitalOceanProdService('test-key', {
+			region: 'sgp1',
+			size: 's-1vcpu-1gb',
+			image: 'ubuntu-24-04-x64',
+		});
+		await service.createDroplet('test-proj', 'https://github.com/example/repo.git', undefined, 'att-1', 'develop');
+
+		const postCall = fetchSpy.mock.calls.find(
+			(call) => typeof call[0] === 'string' && call[0].includes('/droplets') && call[1]?.method === 'POST',
+		);
+		const postedBody = JSON.parse(postCall![1]!.body as string);
+		expect(postedBody.user_data).toContain('git clone --branch "develop" --single-branch "https://github.com/example/repo.git" /opt/demo-app');
 	});
 
 	it('7. DigitalOceanProdService should use region, size, and image from config or fallback to defaults', async () => {
