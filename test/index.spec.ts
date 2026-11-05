@@ -1357,7 +1357,7 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 		expect(getMaxInstances({ ...testEnv, MAX_INSTANCES: '0' } as any)).toBeNull();
 		expect(getMaxInstances({ ...testEnv, MAX_INSTANCES: '-5' } as any)).toBeNull();
 		expect(getMaxInstances({ ...testEnv, MAX_INSTANCES: '' } as any)).toBeNull();
-		expect(getMaxInstances(testEnv)).toBeNull();
+		expect(getMaxInstances({ ...testEnv, MAX_INSTANCES: undefined } as any)).toBeNull();
 
 		// Clean DB state
 		await testEnv.mydb.prepare('DELETE FROM project_demos').run();

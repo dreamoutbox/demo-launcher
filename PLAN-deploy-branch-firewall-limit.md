@@ -53,11 +53,11 @@ Build/test: `pnpm test` (vitest, `test/*.spec.ts`), `pnpm types` after `wrangler
   - [x] Tests: under limit launches, at limit rejected with 429 + action log, relaunch of already-active project not blocked, unset env means unlimited.
 - Done when: `pnpm test` passes; with `MAX_INSTANCES=1` a second distinct project launch returns 429.
 
-### Phase 5: Docs and TODO cleanup [STATUS: TODO]
+### Phase 5: Docs and TODO cleanup [STATUS: DONE]
 - Goal: document new settings and close the items.
 - Tasks:
-  - [ ] README: document `DO_FIREWALL_EXTRA_INBOUND_PORTS`, per-project `firewallPorts`, `MAX_INSTANCES`, and branch behavior.
-  - [ ] Tick the three items in `TODO.md`.
+  - [x] README: document `DO_FIREWALL_EXTRA_INBOUND_PORTS`, per-project `firewallPorts`, `MAX_INSTANCES`, and branch behavior.
+  - [x] Tick the three items in `TODO.md`.
 - Done when: README lists the env vars; `pnpm test` still passes.
 
 ## Unknowns, risks, assumptions

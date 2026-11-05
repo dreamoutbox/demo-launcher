@@ -34,11 +34,11 @@
 
 - [x] add highlight color to all actions in /admin/action_log
 
-- [ ] git branch to deploy
+- [x] git branch to deploy
 
-- [ ] firewall allowed incoming ports. extend default firewall rules.
+- [x] firewall allowed incoming ports. extend default firewall rules.
 
-- [ ] limit instances count
+- [x] limit instances count
 
 - [ ] rename `src/helper.ts` `checkHealth` -> `checkHealthSocket` and move to `src/healthcheck.ts`
 

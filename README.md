@@ -24,7 +24,17 @@ Each demo is stopped after one hour. A scheduled Worker runs every five minutes,
 
 ## Configure Projects
 
-Edit [`src/projects.json`](src/projects.json) and replace the example GitHub URLs with the repositories you want to showcase. The repositories must be publicly cloneable by a new droplet. At startup, the droplet clones the repository and runs `demo-launcher-entrypoint.sh` from its root if present; otherwise, it serves a basic placeholder page with Nginx.
+Edit [`src/projects.json`](src/projects.json) and replace the example GitHub URLs with the repositories you want to showcase. The repositories must be publicly cloneable by a new droplet.
+
+Each project entry supports the following options:
+- `repoUrl`: Target Git repository URL.
+- `branch`: Optional Git branch or tag to check out (e.g. `"main"`). Clones via `git clone --branch <branch> --single-branch`.
+- `firewallPorts`: Optional list of extra TCP port numbers or port ranges to allow through the firewall for the project (e.g. `["8081", "9000-9010"]`).
+- `healthcheckPort` and `healthcheckPath`: Port and path checked during readiness probes.
+- `appPort`: Port on which the web application serves traffic.
+- `size`: Optional DigitalOcean droplet size override (e.g. `"s-1vcpu-2gb"`).
+
+At startup, the droplet clones the repository (checking out the specified branch if configured) and runs `demo-launcher-entrypoint.sh` from its root if present; otherwise, it serves a basic placeholder page with Nginx.
 
 ## Deploy
 
@@ -65,9 +75,18 @@ The production service creates Ubuntu 24.04 droplets in DigitalOcean region `sgp
 
 Every newly launched droplet is automatically tagged with `['demo-launcher', <projectId>, <firewallTag>]`. Before creating a droplet, the Worker ensures the DigitalOcean tag and cloud firewall exist (default name and tag: `demo-launcher-fw`). DigitalOcean automatically attaches the firewall to any droplet carrying that tag.
 
-- **Inbound rules:** TCP ports 22, 80, 443 and ICMP from `0.0.0.0/0` and `::/0`.
+- **Inbound rules:** TCP ports 22, 80, 443, 81, 8080, 3000, 9000, plus ICMP from `0.0.0.0/0` and `::/0`.
+- **Extra inbound ports:** Configure globally via `DO_FIREWALL_EXTRA_INBOUND_PORTS` in `wrangler.jsonc` or `.env` (comma-separated, e.g. `"5432,8000-8100"`), or per-project via `firewallPorts` in `src/projects.json`. All extra ports are unioned and deduplicated into the shared firewall rules. Existing firewalls automatically detect configuration drift and update via PUT.
 - **Outbound rules:** All TCP, UDP, and ICMP traffic to any destination.
 - **Environment overrides:** Set `DO_FIREWALL_NAME` and `DO_FIREWALL_TAG` in `wrangler.jsonc` or `.env` to customize the firewall name and tag.
+
+### Concurrent Instance Limit
+
+Set `MAX_INSTANCES` in `wrangler.jsonc` vars or `.env` (e.g. `"5"`) to cap the total number of simultaneous active demo droplets (`LAUNCHING` or `RUNNING`). When the limit is reached:
+- `POST /api/launch` rejects new requests with HTTP `429 Too Many Requests` and logs the rejection in `action_logs`.
+- The global Durable Object mutex prevents race conditions across projects.
+- Relaunching an already-active demo is permitted.
+- If unset, concurrent instances are unlimited.
 
 ### Database Migrations
 
