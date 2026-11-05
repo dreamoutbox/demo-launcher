@@ -42,9 +42,9 @@
 
 - [x] rename `src/helper.ts` `checkHealth` -> `checkHealthSocket` and move to `src/healthcheck.ts`
 
-- [ ] make projects.json as secret. use `npx wrangler secret put PROJECTS_JSON < projects.json`
-- [ ] add dev shell script wrapper for update `PROJECTS_JSON` secret.
-- [ ] make `dev.sh` script update local `PROJECTS_JSON` secret before dev watch run. 
+- [ ] make projects.json as secret var. use `npx wrangler secret put PROJECTS_JSON < projects.json`
+- [ ] add dev shell script wrapper for update `PROJECTS_JSON` secret var.
+- [ ] make `dev.sh` script update local `PROJECTS_JSON` secret var before dev watch run. 
 - [ ] secret env vars support in droplet. from project spec in `PROJECTS_JSON`.
 
 # CHORE
@@ -59,6 +59,7 @@
 
 - [ ] set REPO_URL and DROPLET_IP env in created demo droplet
 
-- [ ] statistics collect with link ?ref=
+- [ ] statistics collect where user come from, with `?ref=` in link
 
-- [ ] user enter email → send email to user with link+token → user open link and wait
+- [ ] new method user to create demo instance: user enter email → send email to user with link+token → user open link -> backend validate token -> launch droplet
+
