@@ -34,12 +34,16 @@
 
 - [x] add highlight color to all actions in /admin/action_log
 
+- [ ] git branch to deploy
+
+- [ ] firewall allowed incoming ports. extend default firewall rules.
+
+- [ ] limit instances count
+
 - [ ] set REPO_URL and DROPLET_IP env in created demo droplet
 
 - [ ] make projects.json as secret. use `npx wrangler secret put PROJECTS_JSON < projects.json`
-
 - [ ] add dev shell script wrapper for update `PROJECTS_JSON` secret.
-
 - [ ] make `dev.sh` script update local `PROJECTS_JSON` secret before dev watch run. 
 
 - [ ] env secret support. add secret env (from project spec in `PROJECTS_JSON`) to demo server.
@@ -51,3 +55,9 @@
 - [x] add manual cron cleanup button to admin page.
 
 - [x] add proper markdown render to Project README view.
+
+# BACKLOG
+
+- [ ] statistics collect with link ?ref=
+
+- [ ] user enter email → send email to user with link+token → user open link and wait
