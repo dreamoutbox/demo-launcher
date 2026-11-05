@@ -33,3 +33,4 @@ Observed directly during local development when a demo instance passed its 30-mi
 
 - [x] Document in `AGENTS.md` that cron triggers do not fire automatically in `wrangler dev`.
 - [x] Use `./dev-trigger-cron.sh` or the Admin UI cleanup button when testing scheduled tasks locally.
+

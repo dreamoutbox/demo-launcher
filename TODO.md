@@ -62,4 +62,3 @@
 - [ ] statistics collect where user come from, with `?ref=` in link
 
 - [ ] new method user to create demo instance: user enter email → send email to user with link+token → user open link -> backend validate token -> launch droplet
-

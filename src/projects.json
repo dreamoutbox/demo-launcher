@@ -1,5 +1,16 @@
 [
   {
+    "id": "pgvisor",
+    "name": "pgvisor",
+    "repoUrl": "https://github.com/dreamoutbox/pgvisor",
+    "branch": "master",
+    "healthcheckPort": "8080",
+    "healthcheckPath": "/",
+    "appPort": "8080",
+    "size": "s-2vcpu-4gb",
+    "firewallPorts": "8080,5432,9001"
+  },
+  {
     "id": "rust-playground-server",
     "name": "rust-playground-server",
     "repoUrl": "https://github.com/dreamoutbox/rust-playground-server",
@@ -27,7 +38,9 @@
     "healthcheckPort": "8080",
     "healthcheckPath": "/",
     "appPort": "8080",
-    "firewallPorts": ["8081"],
+    "firewallPorts": [
+      "8081"
+    ],
     "size": "s-1vcpu-1gb"
   },
   {
