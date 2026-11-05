@@ -1,13 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { waitForHealthy } from '../src/healthcheck';
-import { checkHealth } from '../src/helper';
+import { checkHealthSocket, waitForHealthyFetch } from '../src/healthcheck';
 import { connect } from 'cloudflare:sockets';
 
 vi.mock('cloudflare:sockets', () => ({
 	connect: vi.fn(),
 }));
 
-describe('checkHealth TCP probing', () => {
+describe('checkHealthSocket TCP probing', () => {
 	beforeEach(() => {
 		vi.useFakeTimers();
 		vi.clearAllMocks();
@@ -18,15 +17,15 @@ describe('checkHealth TCP probing', () => {
 	});
 
 	it('returns healthy: false for invalid port numbers', async () => {
-		const invalidResult = await checkHealth('1.2.3.4', 'invalid-port');
+		const invalidResult = await checkHealthSocket('1.2.3.4', 'invalid-port');
 		expect(invalidResult.healthy).toBe(false);
 		expect(invalidResult.error).toContain('Invalid port');
 
-		const zeroResult = await checkHealth('1.2.3.4', 0);
+		const zeroResult = await checkHealthSocket('1.2.3.4', 0);
 		expect(zeroResult.healthy).toBe(false);
 		expect(zeroResult.error).toContain('Invalid port');
 
-		const overflowResult = await checkHealth('1.2.3.4', 70000);
+		const overflowResult = await checkHealthSocket('1.2.3.4', 70000);
 		expect(overflowResult.healthy).toBe(false);
 		expect(overflowResult.error).toContain('Invalid port');
 	});
@@ -38,7 +37,7 @@ describe('checkHealth TCP probing', () => {
 			close: closeMock,
 		} as any);
 
-		const result = await checkHealth('1.2.3.4', '8080');
+		const result = await checkHealthSocket('1.2.3.4', '8080');
 
 		expect(connect).toHaveBeenCalledWith({ hostname: '1.2.3.4', port: 8080 });
 		expect(result).toEqual({ healthy: true, status: 200 });
@@ -52,7 +51,7 @@ describe('checkHealth TCP probing', () => {
 			close: closeMock,
 		} as any);
 
-		const result = await checkHealth('1.2.3.4', 8080);
+		const result = await checkHealthSocket('1.2.3.4', 8080);
 
 		expect(result.healthy).toBe(false);
 		expect(result.error).toContain('Connection refused');
@@ -68,7 +67,7 @@ describe('checkHealth TCP probing', () => {
 			close: closeMock,
 		} as any);
 
-		const checkPromise = checkHealth('1.2.3.4', '8080', '/', 2000);
+		const checkPromise = checkHealthSocket('1.2.3.4', '8080', '/', 2000);
 		await vi.advanceTimersByTimeAsync(2001);
 
 		const result = await checkPromise;
@@ -89,7 +88,7 @@ describe('waitForHealthy', () => {
 		const fetchMock = vi.fn(async (_url: string) => new Response('ok', { status: 200 }));
 		vi.stubGlobal('fetch', fetchMock);
 
-		expect(await waitForHealthy('1.2.3.4', '80', '/healthz')).toBe(true);
+		expect(await waitForHealthyFetch('1.2.3.4', '80', '/healthz')).toBe(true);
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 		expect(fetchMock.mock.calls[0][0]).toBe('http://1.2.3.4:80/healthz');
 	});
@@ -98,7 +97,7 @@ describe('waitForHealthy', () => {
 		const fetchMock = vi.fn(async (_url: string) => new Response('ok', { status: 200 }));
 		vi.stubGlobal('fetch', fetchMock);
 
-		await waitForHealthy('1.2.3.4', '8080', 'healthz');
+		await waitForHealthyFetch('1.2.3.4', '8080', 'healthz');
 		expect(fetchMock.mock.calls[0][0]).toBe('http://1.2.3.4:8080/healthz');
 	});
 
@@ -110,7 +109,7 @@ describe('waitForHealthy', () => {
 			.mockResolvedValueOnce(new Response('ok', { status: 200 }));
 		vi.stubGlobal('fetch', fetchMock);
 
-		const promise = waitForHealthy('1.2.3.4', '80', '/healthz', 60_000, 1_000);
+		const promise = waitForHealthyFetch('1.2.3.4', '80', '/healthz', 60_000, 1_000);
 		await vi.runAllTimersAsync();
 
 		expect(await promise).toBe(true);
@@ -120,7 +119,7 @@ describe('waitForHealthy', () => {
 	it('returns false when the timeout elapses without a healthy response', async () => {
 		vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('down')));
 
-		const promise = waitForHealthy('1.2.3.4', '80', '/healthz', 5_000, 1_000);
+		const promise = waitForHealthyFetch('1.2.3.4', '80', '/healthz', 5_000, 1_000);
 		await vi.runAllTimersAsync();
 
 		expect(await promise).toBe(false);

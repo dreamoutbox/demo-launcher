@@ -1,7 +1,6 @@
 import projects from './projects.json';
 import { getDigitalOceanService } from './digitalocean';
 import {
-	checkHealth,
 	countActiveDemos,
 	createTurnstileErrorResponse,
 	formatUptime,
@@ -10,6 +9,7 @@ import {
 	GLOBAL_LAUNCHER_NAME,
 	isProjectActive,
 } from './helper';
+import { checkHealthSocket } from './healthcheck';
 import { ActionStatus, ActionType, DemoStatus, Env, LaunchPhase, QueueMessage } from './types';
 import { verifyTurnstileToken, TurnstileStatus } from './turnstile';
 import { extractClientInfo, getActionLogs, isAdminAuthorized, recordActionLog } from './action-log';
@@ -147,7 +147,7 @@ export default {
 				return Response.json({ error: 'Missing ip parameter' }, { status: 400 });
 			}
 
-			const result = await checkHealth(ip, port, path);
+			const result = await checkHealthSocket(ip, port, path);
 			return Response.json(result);
 		}
 
