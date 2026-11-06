@@ -72,5 +72,25 @@
     "healthcheckPath": "/",
     "appPort": "8080",
     "size": "s-2vcpu-4gb"
+  },
+  {
+    "id": "rust-forum",
+    "name": "rust-forum",
+    "repoUrl": "https://github.com/dreamoutbox/rust-forum",
+    "branch": "main",
+    "healthcheckPort": "3000",
+    "healthcheckPath": "/",
+    "appPort": "3000",
+    "size": "s-1vcpu-1gb"
+  },
+  {
+    "id": "nuxtshop",
+    "name": "nuxtshop",
+    "repoUrl": "https://github.com/dreamoutbox/nuxtshop",
+    "branch": "main",
+    "healthcheckPort": "3000",
+    "healthcheckPath": "/",
+    "appPort": "3000",
+    "size": "s-1vcpu-1gb"
   }
 ]
