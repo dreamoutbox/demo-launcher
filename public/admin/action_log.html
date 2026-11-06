@@ -69,13 +69,12 @@
               <th>Status</th>
               <th>Project ID</th>
               <th>Client IP &amp; Country</th>
-              <th>User Agent</th>
               <th>Details</th>
             </tr>
           </thead>
           <tbody id="logs-tbody">
             <tr>
-              <td colspan="7">Loading action logs...</td>
+              <td colspan="6">Loading action logs...</td>
             </tr>
           </tbody>
         </table>
@@ -87,19 +86,6 @@
         <div style="display: flex; gap: 6px;">
           <button type="button" id="prev-page-btn" class="btn-sm" disabled>&larr; Previous</button>
           <button type="button" id="next-page-btn" class="btn-sm" disabled>Next &rarr;</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Inspector Modal -->
-    <div id="details-modal" class="modal-overlay hidden">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3 id="modal-title">Action Log Details</h3>
-          <button type="button" id="modal-close-btn" class="btn-sm">&times;</button>
-        </div>
-        <div class="modal-body">
-          <pre id="modal-json" class="json-viewer"></pre>
         </div>
       </div>
     </div>

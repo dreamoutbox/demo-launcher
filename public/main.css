@@ -302,57 +302,18 @@ tr:nth-child(even) {
   gap: 6px;
 }
 
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  z-index: 100;
-}
-
-.modal-content {
-  background: #fff;
-  border: 1px solid #999;
-  max-width: 700px;
-  width: 100%;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  padding: 16px;
-  box-sizing: border-box;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid #ccc;
-  padding-bottom: 8px;
-  margin-bottom: 12px;
-}
-
-.modal-header h3 {
-  margin: 0;
-}
-
-.modal-body {
-  overflow-y: auto;
-}
-
 pre.json-viewer {
   border: 1px solid #ccc;
   background-color: #f5f5f5;
-  padding: 12px;
-  margin: 0;
+  padding: 6px 8px;
+  margin: 4px 0 0 0;
   overflow-x: auto;
   white-space: pre-wrap;
   word-wrap: break-word;
   font-family: monospace;
-  font-size: 12px;
+  font-size: 11px;
+}
+
+pre.json-viewer:first-child {
+  margin-top: 0;
 }

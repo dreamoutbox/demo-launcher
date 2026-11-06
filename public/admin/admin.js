@@ -27,10 +27,6 @@ const metricQueued = document.getElementById('metric-queued');
 const metricRejected = document.getElementById('metric-rejected');
 const metricUniqueIps = document.getElementById('metric-unique-ips');
 
-const detailsModal = document.getElementById('details-modal');
-const modalCloseBtn = document.getElementById('modal-close-btn');
-const modalJson = document.getElementById('modal-json');
-
 /**
  * Formats an epoch millisecond timestamp to local string and relative label.
  *
@@ -123,7 +119,7 @@ async function fetchActionLogs(page = 0) {
         nextPageBtn.disabled = end >= total;
     } catch (err) {
         console.error('Failed to fetch action logs:', err);
-        logsTbody.innerHTML = `<tr><td colspan="7" class="empty-state" style="color: #c00;">Failed to load action logs. Verify network connection and API server.</td></tr>`;
+        logsTbody.innerHTML = `<tr><td colspan="6" class="empty-state" style="color: #c00;">Failed to load action logs. Verify network connection and API server.</td></tr>`;
     } finally {
         refreshIcon.classList.remove('spinning');
     }
@@ -229,7 +225,7 @@ function renderTable() {
     });
 
     if (filtered.length === 0) {
-        logsTbody.innerHTML = `<tr><td colspan="7" class="empty-state">No matching action logs found.</td></tr>`;
+        logsTbody.innerHTML = `<tr><td colspan="6" class="empty-state">No matching action logs found.</td></tr>`;
         return;
     }
 
@@ -247,7 +243,20 @@ function renderTable() {
                 ? `<span class="code-pill">${escapeHtml(log.project_id)}</span>`
                 : '<span style="color: #888;">-</span>';
 
-            const detailsPreview = log.details ? 'Inspect' : '-';
+            const formattedDetails = formatDetails(log.details);
+            const hasUserAgent = Boolean(log.user_agent);
+            const hasDetails = Boolean(formattedDetails);
+
+            let detailsContent = '<span style="color: #888;">-</span>';
+            if (hasUserAgent || hasDetails) {
+                const uaHtml = hasUserAgent
+                    ? `<div class="user-agent-text" title="${escapeHtml(log.user_agent)}">${escapeHtml(log.user_agent)}</div>`
+                    : '';
+                const detailsHtml = hasDetails
+                    ? `<pre class="json-viewer">${escapeHtml(formattedDetails)}</pre>`
+                    : '';
+                detailsContent = `${uaHtml}${detailsHtml}`;
+            }
 
             return `
             <tr>
@@ -266,10 +275,7 @@ function renderTable() {
                 </div>
               </td>
               <td>
-                <div class="user-agent-text" title="${escapeHtml(log.user_agent || '')}">${escapeHtml(log.user_agent || '-')}</div>
-              </td>
-              <td>
-                ${log.details ? `<button type="button" class="btn-sm" onclick="openDetailsModal(${log.id})">Details</button>` : '<span style="color: #888;">-</span>'}
+                ${detailsContent}
               </td>
             </tr>
           `;
@@ -278,42 +284,28 @@ function renderTable() {
 }
 
 /**
- * Opens details modal displaying structured JSON for a given log ID.
+ * Formats a details string into pretty-printed JSON if valid, or returns raw string.
  *
- * @param logId - Record identifier
+ * @param details - Raw details string from log record
+ * @returns Pretty-printed JSON string or raw text, or empty string if empty
  *
  * @example
  * ```ts
- * openDetailsModal(42);
+ * const formatted = formatDetails('{"status":"ok"}');
  * ```
  */
-window.openDetailsModal = function (logId) {
-    const log = currentLogs.find((l) => l.id === logId);
-    if (!log) return;
-
-    let parsedDetails = log.details;
+function formatDetails(details) {
+    if (!details) return '';
     try {
-        parsedDetails = JSON.parse(log.details || '{}');
+        const parsed = JSON.parse(details);
+        if (typeof parsed === 'object' && parsed !== null) {
+            return JSON.stringify(parsed, null, 2);
+        }
+        return String(parsed);
     } catch {
-        // Keep as string
+        return details;
     }
-
-    const fullPayload = {
-        id: log.id,
-        action: log.action,
-        status: log.status,
-        project_id: log.project_id,
-        ip_address: log.ip_address,
-        country: log.country,
-        user_agent: log.user_agent,
-        created_at: log.created_at,
-        created_at_iso: new Date(log.created_at).toISOString(),
-        details: parsedDetails,
-    };
-
-    modalJson.textContent = JSON.stringify(fullPayload, null, 2);
-    detailsModal.classList.remove('hidden');
-};
+}
 
 /**
  * Copies a string value to the user's clipboard.
@@ -373,14 +365,6 @@ prevPageBtn.addEventListener('click', () => {
 
 nextPageBtn.addEventListener('click', () => {
     fetchActionLogs(currentPage + 1);
-});
-
-modalCloseBtn.addEventListener('click', () => {
-    detailsModal.classList.add('hidden');
-});
-
-detailsModal.addEventListener('click', (e) => {
-    if (e.target === detailsModal) detailsModal.classList.add('hidden');
 });
 
 autoRefreshCheck.addEventListener('change', (e) => {
