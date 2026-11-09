@@ -80,16 +80,16 @@
 	 * https://developers.cloudflare.com/workers/configuration/secrets/
 	 */
 	"vars": {
+		"MAX_INSTANCES": "5",
 		"MAX_DEMO_TIME_SECONDS": "1200",
 		"DO_REGION": "sgp1",
 		"DO_SIZE": "s-1vcpu-1gb",
 		"DO_IMAGE": "ubuntu-24-04-x64",
 		"ENVIRONMENT": "production",
+		"DO_FIREWALL_NAME": "demo-launcher-fw",
+		"DO_FIREWALL_TAG": "demo-launcher-fw",
+		"DO_FIREWALL_EXTRA_INBOUND_PORTS": "3000,8080,5432,8000-8100"
 		// "ADMIN_KEY": "demo-admin-key",
-		// "DO_FIREWALL_NAME": "demo-launcher-fw",
-		// "DO_FIREWALL_TAG": "demo-launcher-fw",
-		// "DO_FIREWALL_EXTRA_INBOUND_PORTS": "5432,8000-8100",
-		// "MAX_INSTANCES": "5",
 		// "LAUNCH_ALLOW_TIME_RANGE": "07:00:00-20:00:00,21:00:00-23:00:00"
 	},
 	/**

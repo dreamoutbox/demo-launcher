@@ -13,6 +13,7 @@ import {
 	getProjectByIdFromDb,
 	getProjectsFromDb,
 	importProjectsToDb,
+	ProjectConfig,
 	resetProjectsTable,
 	sanitizeProjectForPublic,
 	validateProjectsJson,
@@ -27,8 +28,10 @@ import {
 	buildFirewallInboundRules,
 	buildStartupScript,
 	countActiveDemos,
+	escapeBashSingleQuoted,
 	getMaxInstances,
 	isProjectActive,
+	isValidEnvKey,
 	isValidGitBranch,
 	isValidPortOrRange,
 	parsePortList,
@@ -208,6 +211,7 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 			testProject.size,
 			expect.any(String),
 			testProject.branch,
+			(testProject as any).env,
 		);
 
 		const launchedRow = await testEnv.mydb
@@ -327,6 +331,7 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 			projA.size,
 			expect.any(String),
 			projA.branch,
+			(projA as any).env,
 		);
 		expect(createDropletSpy).toHaveBeenCalledWith(
 			projB.id,
@@ -334,6 +339,7 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 			projB.size,
 			expect.any(String),
 			projB.branch,
+			(projB as any).env,
 		);
 	});
 
@@ -1832,5 +1838,173 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 		await waitOnExecutionContext(ctx2);
 		expect(res2.status).toBe(301);
 		expect(res2.headers.get('Location')).toBe('http://localhost/admin/import_projects.html');
+	});
+
+	it('41. buildStartupScript and isValidEnvKey should export secret envs and append to /etc/environment', () => {
+		expect(isValidEnvKey('MY_SECRET_EXAMPLE')).toBe(true);
+		expect(isValidEnvKey('_PRIVATE_VAR_1')).toBe(true);
+		expect(isValidEnvKey('123_INVALID')).toBe(false);
+		expect(isValidEnvKey('BAD-KEY')).toBe(false);
+		expect(isValidEnvKey('BAD KEY')).toBe(false);
+		expect(isValidEnvKey('')).toBe(false);
+
+		expect(escapeBashSingleQuoted('simple')).toBe("'simple'");
+		expect(escapeBashSingleQuoted("it's a secret")).toBe("'it'\\''s a secret'");
+
+		const scriptWithEnv = buildStartupScript('https://github.com/example/repo.git', 'main', {
+			MY_ENV_EXAMPLE: 'example',
+			MY_SECRET_EXAMPLE: "secret'val$1",
+		});
+
+		expect(scriptWithEnv).toContain("export MY_ENV_EXAMPLE='example'");
+		expect(scriptWithEnv).toContain("export MY_SECRET_EXAMPLE='secret'\\''val$1'");
+		expect(scriptWithEnv).toContain("printf '%s\\n' 'MY_ENV_EXAMPLE=example' >> /etc/environment");
+		expect(scriptWithEnv).toContain("printf '%s\\n' 'MY_SECRET_EXAMPLE=secret'\\''val$1' >> /etc/environment");
+
+		// Verify export lines appear before demo-launcher-entrypoint.sh execution
+		const exportIndex = scriptWithEnv.indexOf("export MY_ENV_EXAMPLE='example'");
+		const entrypointIndex = scriptWithEnv.indexOf('./demo-launcher-entrypoint.sh');
+		expect(exportIndex).toBeGreaterThan(-1);
+		expect(exportIndex).toBeLessThan(entrypointIndex);
+
+		expect(() =>
+			buildStartupScript('https://github.com/example/repo.git', 'main', {
+				'INVALID-KEY': 'val',
+			}),
+		).toThrow('Invalid environment variable name');
+	});
+
+	it('42. validateProjectsJson should validate project env field and reject invalid env keys or structures', () => {
+		const validWithEnv = validateProjectsJson([
+			{
+				id: 'env-proj',
+				name: 'Env Project',
+				repoUrl: 'https://github.com/example/env-proj',
+				env: {
+					API_KEY: 'secret-123',
+					PORT_NUM: 8080 as any,
+				},
+			},
+		]);
+		expect(validWithEnv.valid).toBe(true);
+		if (validWithEnv.valid) {
+			expect(validWithEnv.projects[0].env).toEqual({
+				API_KEY: 'secret-123',
+				PORT_NUM: '8080',
+			});
+			// Public sanitization strips env
+			const pub = sanitizeProjectForPublic(validWithEnv.projects[0]);
+			expect((pub as any).env).toBeUndefined();
+		}
+
+		// Invalid env (array instead of object)
+		expect(
+			validateProjectsJson([
+				{
+					id: 'bad-env-arr',
+					name: 'Bad Env',
+					repoUrl: 'https://github.com/example/repo',
+					env: ['A=B'],
+				},
+			]).valid,
+		).toBe(false);
+
+		// Invalid env key name
+		expect(
+			validateProjectsJson([
+				{
+					id: 'bad-env-key',
+					name: 'Bad Env Key',
+					repoUrl: 'https://github.com/example/repo',
+					env: { 'INVALID-NAME': 'value' },
+				},
+			]).valid,
+		).toBe(false);
+
+		// Invalid env value type (nested object)
+		expect(
+			validateProjectsJson([
+				{
+					id: 'bad-env-val',
+					name: 'Bad Env Val',
+					repoUrl: 'https://github.com/example/repo',
+					env: { VALID_KEY: { nested: true } },
+				},
+			]).valid,
+		).toBe(false);
+	});
+
+	it('43. Launching a project with env secrets should pass env to createDroplet and set them in user_data', async () => {
+		const envVars = {
+			MY_ENV_EXAMPLE: 'example',
+			MY_SECRET_EXAMPLE: 'super-secret',
+		};
+		await importProjectsToDb(testEnv, [
+			{
+				id: 'secret-env-app',
+				name: 'Secret Env App',
+				repoUrl: 'https://github.com/example/secret-env-app',
+				branch: 'main',
+				size: 's-1vcpu-2gb',
+				env: envVars,
+			},
+		]);
+
+		const createDropletSpy = vi.spyOn(DigitalOceanMockService.prototype, 'createDroplet');
+
+		const batch = createMessageBatch<QueueMessage>('demo-launch-queue', [
+			{
+				id: 'msg-env-launch',
+				timestamp: new Date(),
+				body: { projectId: 'secret-env-app', phase: LaunchPhase.CREATE },
+				attempts: 1,
+			},
+		]);
+
+		const ctx = createExecutionContext();
+		await worker.queue(batch, testEnv, ctx);
+		const result = await getQueueResult(batch, ctx);
+
+		expect(result.explicitAcks).toContain('msg-env-launch');
+		expect(createDropletSpy).toHaveBeenCalledWith(
+			'secret-env-app',
+			'https://github.com/example/secret-env-app',
+			's-1vcpu-2gb',
+			expect.any(String),
+			'main',
+			envVars,
+		);
+
+		// Also verify DigitalOceanProdService.createDroplet embeds env secrets in user_data
+		let capturedUserData = '';
+		vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+			if (typeof url === 'string' && url.includes('/firewalls') && (!init || init.method === 'GET')) {
+				return new Response(
+					JSON.stringify({ firewalls: [{ id: 'fw-1', name: 'demo-launcher-fw', tags: ['demo-launcher-fw'] }] }),
+					{ status: 200 },
+				);
+			}
+			if (typeof url === 'string' && url.includes('/droplets') && init?.method === 'POST') {
+				const body = JSON.parse(init.body as string);
+				capturedUserData = body.user_data;
+				return new Response(JSON.stringify({ droplet: { id: 556677 } }), { status: 200 });
+			}
+			return new Response(JSON.stringify({}), { status: 200 });
+		});
+
+		const prodService = new DigitalOceanProdService('test-do-token');
+		await prodService.createDroplet(
+			'secret-env-app',
+			'https://github.com/example/secret-env-app',
+			's-1vcpu-2gb',
+			'att-env',
+			'main',
+			envVars,
+		);
+
+		expect(capturedUserData).toContain("export MY_ENV_EXAMPLE='example'");
+		expect(capturedUserData).toContain("export MY_SECRET_EXAMPLE='super-secret'");
+		expect(capturedUserData).toContain("printf '%s\\n' 'MY_ENV_EXAMPLE=example' >> /etc/environment");
+		expect(capturedUserData).toContain("printf '%s\\n' 'MY_SECRET_EXAMPLE=super-secret' >> /etc/environment");
 	});
 });

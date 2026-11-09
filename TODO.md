@@ -58,6 +58,14 @@
 
 - [x] add new page for import projects.json to DB. with input text area for paste json. add server side validation. if success show success message and reload table.
 
+- [x] add env (for secret) in projects.json
+
+- [x] created droplets should have secret envs set.
+
+---
+
+- [ ] FIX dev env create real DO droplets even `DO_USE_REAL_API=0`
+
 ---
 
 # CHORE
@@ -77,10 +85,3 @@
 - [ ] statistics collect where user come from, with `?ref=` in link
 
 - [ ] new method user to create demo instance: user enter email → send email to user with link+token → user open link -> backend validate token -> launch droplet
-
-#### still reviewing
-
-- [ ] make projects.json as secret var. use `npx wrangler secret put PROJECTS_JSON < projects.json`
-- [ ] add dev shell script wrapper for update `PROJECTS_JSON` secret var.
-- [ ] make `dev.sh` script update local `PROJECTS_JSON` secret var before dev watch run. 
-- [ ] secret env vars support in droplet. from project spec in `PROJECTS_JSON`.

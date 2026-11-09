@@ -15,6 +15,7 @@ export interface IDigitalOceanService extends BaseIDigitalOceanService {
 	 * @param size - Optional droplet machine size override
 	 * @param attemptId - Optional unique launch attempt identifier
 	 * @param branch - Optional git branch name to check out
+	 * @param envVars - Optional key-value map of project secret/environment variables to set on the droplet
 	 */
 	createDroplet(
 		projectId: string,
@@ -22,6 +23,7 @@ export interface IDigitalOceanService extends BaseIDigitalOceanService {
 		size?: string,
 		attemptId?: string,
 		branch?: string,
+		envVars?: Record<string, string>,
 	): Promise<DropletInfo>;
 }
 

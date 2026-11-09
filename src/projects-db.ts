@@ -1,4 +1,4 @@
-import { isValidGitBranch, isValidPortOrRange, parsePortList } from './helper';
+import { isValidEnvKey, isValidGitBranch, isValidPortOrRange, parsePortList } from './helper';
 import { Env } from './types';
 
 /**
@@ -15,6 +15,7 @@ export interface ProjectConfig {
 	appPort?: string;
 	size?: string;
 	firewallPorts?: string | string[];
+	env?: Record<string, string>;
 	[key: string]: unknown;
 }
 
@@ -177,6 +178,32 @@ export function validateProjectsJson(input: unknown): ProjectValidationResult {
 			}
 		}
 
+		// 9. Validate Env (optional)
+		let envVars: Record<string, string> | undefined;
+		if (p.env !== undefined && p.env !== null) {
+			if (typeof p.env !== 'object' || Array.isArray(p.env)) {
+				return { valid: false, error: `${itemPrefix} ("${id}") env must be a key-value object` };
+			}
+			const normalizedEnv: Record<string, string> = {};
+			for (const [rawKey, rawVal] of Object.entries(p.env as Record<string, unknown>)) {
+				const key = rawKey.trim();
+				if (!isValidEnvKey(key)) {
+					return {
+						valid: false,
+						error: `${itemPrefix} ("${id}") env key "${rawKey}" is invalid (must be a valid shell variable name)`,
+					};
+				}
+				if (typeof rawVal !== 'string' && typeof rawVal !== 'number' && typeof rawVal !== 'boolean') {
+					return {
+						valid: false,
+						error: `${itemPrefix} ("${id}") env value for "${key}" must be a string, number, or boolean`,
+					};
+				}
+				normalizedEnv[key] = String(rawVal);
+			}
+			envVars = normalizedEnv;
+		}
+
 		// Preserve all fields including potential secrets/extra metadata
 		const projectConfig: ProjectConfig = {
 			...p,
@@ -189,6 +216,7 @@ export function validateProjectsJson(input: unknown): ProjectValidationResult {
 			...(appPort !== undefined ? { appPort } : {}),
 			...(size !== undefined ? { size } : {}),
 			...(firewallPorts !== undefined ? { firewallPorts } : {}),
+			...(envVars !== undefined ? { env: envVars } : {}),
 		};
 
 		validated.push(projectConfig);

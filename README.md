@@ -44,7 +44,8 @@ Each project entry supports the following options:
 - `healthcheckPort` and `healthcheckPath`: Port and path checked during readiness probes.
 - `appPort`: Port on which the web application serves traffic.
 - `size`: Optional DigitalOcean droplet size override (e.g. `"s-1vcpu-2gb"`).
-- Any custom / secret variables (preserved in D1 and masked from public `/api/projects`).
+- `env`: Optional key-value object of environment variables / secrets (e.g. `{"MY_SECRET": "value"}`). Exported in the startup script before `demo-launcher-entrypoint.sh` runs and appended to `/etc/environment` on the created droplet, while remaining stripped from public `/api/projects` responses.
+- Any additional custom / secret fields (preserved in D1 and masked from public `/api/projects`).
 
 At startup, the droplet clones the repository (checking out the specified branch if configured) and runs `demo-launcher-entrypoint.sh` from its root if present; otherwise, it serves a basic placeholder page with Nginx.
 

@@ -41,7 +41,11 @@
     "firewallPorts": [
       "8081"
     ],
-    "size": "s-1vcpu-1gb"
+    "size": "s-1vcpu-1gb",
+    "env": {
+      "MY_ENV_EXAMPLE": "example",
+      "MY_SECRET_EXAMPLE": "secret"
+    }
   },
   {
     "id": "rust-restaurant-system",
@@ -51,7 +55,11 @@
     "healthcheckPort": "3000",
     "healthcheckPath": "/",
     "appPort": "3000",
-    "size": "s-1vcpu-2gb"
+    "size": "s-1vcpu-2gb",
+    "env": {
+      "MY_ENV_EXAMPLE": "example",
+      "MY_SECRET_EXAMPLE": "secret"
+    }
   },
   {
     "id": "theater-seat-booking",
@@ -61,7 +69,11 @@
     "healthcheckPort": "3000",
     "healthcheckPath": "/",
     "appPort": "3000",
-    "size": "s-2vcpu-4gb"
+    "size": "s-2vcpu-4gb",
+    "env": {
+      "MY_ENV_EXAMPLE": "example",
+      "MY_SECRET_EXAMPLE": "secret"
+    }
   },
   {
     "id": "delivery-app",
@@ -74,4 +86,3 @@
     "size": "s-2vcpu-4gb"
   }
 ]
-

@@ -53,20 +53,59 @@ export function isValidGitBranch(branch: string): boolean {
 }
 
 /**
+ * Validates whether an environment variable name is a valid POSIX shell identifier
+ * (starts with a letter or underscore, followed by letters, digits, or underscores).
+ *
+ * @param key - Environment variable name to validate
+ * @returns True if key is a valid POSIX shell variable name
+ *
+ * @example
+ * ```ts
+ * isValidEnvKey('MY_SECRET_EXAMPLE'); // true
+ * isValidEnvKey('123_INVALID'); // false
+ * ```
+ */
+export function isValidEnvKey(key: string): boolean {
+    return /^[A-Za-z_][A-Za-z0-9_]*$/.test(key);
+}
+
+/**
+ * Escapes a string for safe inclusion inside single-quoted bash strings.
+ * Replaces each single quote `'` with `'\''`.
+ *
+ * @param value - Raw string value to escape
+ * @returns Single-quoted bash literal
+ *
+ * @example
+ * ```ts
+ * escapeBashSingleQuoted("it's a secret"); // "'it'\\''s a secret'"
+ * ```
+ */
+export function escapeBashSingleQuoted(value: string): string {
+    return `'${value.replace(/'/g, "'\\''")}'`;
+}
+
+/**
  * Generates the startup bash script (Cloud-Init user_data)
  * Installs Nginx, clones the target repo (optionally targeting a specific branch),
+ * sets project-specific environment variables in both the shell and /etc/environment,
  * and executes demo-launcher-entrypoint.sh, piping command outputs to ./demo-launcher/startup.log.
  *
  * @param repoUrl - Git repository URL to clone and run
  * @param branch - Optional git branch name to check out
+ * @param envVars - Optional key-value map of project secret/environment variables to set on the droplet
  * @returns Bash script string used as cloud-init user_data
  *
  * @example
  * ```ts
- * const script = buildStartupScript('https://github.com/dreamoutbox/demo-launcher-simple-project', 'main');
+ * const script = buildStartupScript('https://github.com/dreamoutbox/demo-launcher-simple-project', 'main', { MY_SECRET: 'val' });
  * ```
  */
-export function buildStartupScript(repoUrl: string, branch?: string): string {
+export function buildStartupScript(
+    repoUrl: string,
+    branch?: string,
+    envVars?: Record<string, string>,
+): string {
     // # nginx
     // #systemctl enable nginx
     // #systemctl start nginx
@@ -79,6 +118,28 @@ export function buildStartupScript(repoUrl: string, branch?: string): string {
         }
         cloneCmd = `git clone --branch "${trimmedBranch}" --single-branch "${repoUrl}" /opt/demo-app`;
     }
+
+    const exportLines: string[] = [];
+    const etcEnvLines: string[] = [];
+    if (envVars) {
+        for (const [rawKey, rawVal] of Object.entries(envVars)) {
+            const key = rawKey.trim();
+            if (!isValidEnvKey(key)) {
+                throw new Error(`Invalid environment variable name: "${rawKey}"`);
+            }
+            const val = String(rawVal);
+            const quotedVal = escapeBashSingleQuoted(val);
+            exportLines.push(`export ${key}=${quotedVal}`);
+            const singleLineVal = val.replace(/[\r\n]+/g, ' ');
+            const quotedAssignment = escapeBashSingleQuoted(`${key}=${singleLineVal}`);
+            etcEnvLines.push(`printf '%s\\n' ${quotedAssignment} >> /etc/environment`);
+        }
+    }
+
+    const envSection =
+        exportLines.length > 0
+            ? `\n# Set project environment variables\n${exportLines.join('\n')}\n${etcEnvLines.join('\n')}\n`
+            : '';
 
     return `#!/bin/bash
 set -euo pipefail
@@ -95,7 +156,7 @@ apt-get install -y git curl
 mkdir -p /opt/demo-app
 ${cloneCmd}
 cd /opt/demo-app
-
+${envSection}
 # 3. Execute demo-launcher-entrypoint.sh if present
 if [ -f "./demo-launcher-entrypoint.sh" ]; then
     chmod +x ./demo-launcher-entrypoint.sh

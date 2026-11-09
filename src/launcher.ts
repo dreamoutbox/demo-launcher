@@ -108,6 +108,7 @@ export class ProjectLauncher extends DurableObject<Env> {
 				project.size,
 				claim.attemptId,
 				project.branch,
+				project.env,
 			);
 
 			if (!(await this.saveDroplet(projectId, claim.attemptId, droplet))) {

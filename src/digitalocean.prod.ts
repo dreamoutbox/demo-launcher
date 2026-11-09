@@ -395,13 +395,21 @@ export class DigitalOceanProdService implements IDigitalOceanService {
 	 * @param size - Optional per-project size override
 	 * @param attemptId - Optional launch attempt identifier added as a tag
 	 * @param branch - Optional git branch name to check out
+	 * @param envVars - Optional key-value map of project secret/environment variables to set on the droplet
 	 * @returns Droplet id, empty IP, status, and tags
 	 *
 	 * @example
-	 * const droplet = await service.createDroplet('go-pos', repoUrl, 's-1vcpu-1gb', attemptId, 'main');
+	 * const droplet = await service.createDroplet('go-pos', repoUrl, 's-1vcpu-1gb', attemptId, 'main', { MY_SECRET: 'val' });
 	 */
-	async createDroplet(projectId: string, repoUrl: string, size?: string, attemptId?: string, branch?: string): Promise<DropletInfo> {
-		const userData = buildStartupScript(repoUrl, branch);
+	async createDroplet(
+		projectId: string,
+		repoUrl: string,
+		size?: string,
+		attemptId?: string,
+		branch?: string,
+		envVars?: Record<string, string>,
+	): Promise<DropletInfo> {
+		const userData = buildStartupScript(repoUrl, branch, envVars);
 
 		// Ensure firewall exists and is tagged before provisioning droplet
 		await this.ensureFirewall();
