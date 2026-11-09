@@ -220,3 +220,4 @@ dropletsTbody.addEventListener('click', (e) => {
 if (requireAdminKey()) {
 	loadDroplets();
 }
+

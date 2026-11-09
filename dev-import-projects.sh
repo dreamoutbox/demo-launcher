@@ -18,3 +18,4 @@ curl -s "http://localhost:8787/api/admin/projects/import" \
     -H "x-admin-key: ${ADMIN_KEY:-demo-admin-key}" \
     --data-binary "@${FILE_PATH}" \
     | jq .
+

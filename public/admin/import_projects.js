@@ -269,3 +269,4 @@ refreshTableBtn.addEventListener('click', loadProjects);
 if (requireAdminKey()) {
 	loadProjects();
 }
+

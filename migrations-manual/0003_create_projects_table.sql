@@ -3,3 +3,4 @@ CREATE TABLE IF NOT EXISTS projects (
     data TEXT NOT NULL,
     updated_at INTEGER NOT NULL
 );
+

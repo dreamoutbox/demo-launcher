@@ -319,3 +319,4 @@ export async function resetProjectsTable(env: Env): Promise<{ deletedCount: numb
 	const result = await env.mydb.prepare('DELETE FROM projects').run();
 	return { deletedCount: result.meta.changes ?? 0 };
 }
+

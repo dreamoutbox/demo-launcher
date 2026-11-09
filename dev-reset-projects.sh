@@ -18,3 +18,4 @@ echo "Calling admin reset API (/api/admin/projects/reset)..."
 curl -s -X POST "http://localhost:8787/api/admin/projects/reset" \
     -H "x-admin-key: ${ADMIN_KEY:-demo-admin-key}" \
     | jq .
+
