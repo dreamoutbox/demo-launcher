@@ -172,3 +172,7 @@ ssh-keys/
 production.log.json
 production.log.cleaned.json
 note2.txt
+
+# Projects configuration
+projects.json
+

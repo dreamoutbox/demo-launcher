@@ -20,12 +20,12 @@ Build/test: `pnpm test` (Vitest), `pnpm types` if `wrangler.jsonc` bindings chan
 
 ## Phases
 
-### Phase 1: Project Template, Gitignore, and D1 Schema [STATUS: TODO]
+### Phase 1: Project Template, Gitignore, and D1 Schema [STATUS: DONE]
 - Goal: Move `src/projects.json` to root `projects.template.json`, gitignore `projects.json`, and add the `projects` table to D1 schema and migrations.
 - Tasks:
-  - [ ] Create `projects.template.json` in the repo root (copied from current `src/projects.json` with clean sample projects) and copy it to `projects.json` locally; add `/projects.json` to `.gitignore` (and keep `src/projects.json` removed once Phase 2 switches imports).
-  - [ ] Add `CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, data TEXT NOT NULL, updated_at INTEGER NOT NULL);` to `schema.sql`.
-  - [ ] Add migration file `migrations-manual/0003_create_projects_table.sql` and update `dev-migrate.sh` and `dev-reset-local.sh` to include the `projects` table.
+  - [x] Create `projects.template.json` in the repo root (copied from current `src/projects.json` with clean sample projects) and copy it to `projects.json` locally; add `/projects.json` to `.gitignore` (and keep `src/projects.json` removed once Phase 2 switches imports).
+  - [x] Add `CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, data TEXT NOT NULL, updated_at INTEGER NOT NULL);` to `schema.sql`.
+  - [x] Add migration file `migrations-manual/0003_create_projects_table.sql` and update `dev-migrate.sh` and `dev-reset-local.sh` to include the `projects` table.
 - Done when: `./dev-migrate.sh --local` succeeds and creates the `projects` table; `projects.json` is ignored by `git status`.
 
 ### Phase 2: Project Repository, Validation, Import & Reset Functions, and Runtime DB Lookup [STATUS: TODO]

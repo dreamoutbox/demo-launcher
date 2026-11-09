@@ -8,6 +8,12 @@ CREATE TABLE IF NOT EXISTS project_demos (
     attempt_id TEXT       -- UUID for the current launch attempt
 );
 
+CREATE TABLE IF NOT EXISTS projects (
+    id TEXT PRIMARY KEY,
+    data TEXT NOT NULL,       -- Serialized full project configuration JSON
+    updated_at INTEGER NOT NULL -- Unix timestamp in milliseconds
+);
+
 CREATE TABLE IF NOT EXISTS action_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     action TEXT NOT NULL,

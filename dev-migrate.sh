@@ -29,3 +29,13 @@ else
     npx wrangler d1 execute "$DB_NAME" "$TARGET" --yes --file=./migrations-manual/0002_project_demos_add_attempt_id.sql
     echo "Migration completed successfully."
 fi
+
+# Check if 'projects' table exists
+PROJECTS_TABLE=$(npx wrangler d1 execute "$DB_NAME" "$TARGET" --command="SELECT name FROM sqlite_master WHERE type='table' AND name='projects'" --json)
+if echo "$PROJECTS_TABLE" | grep -q '"name": "projects"'; then
+    echo "Table 'projects' already exists. Skipping migration."
+else
+    echo "Applying migration: creating 'projects' table..."
+    npx wrangler d1 execute "$DB_NAME" "$TARGET" --yes --file=./migrations-manual/0003_create_projects_table.sql
+    echo "Migration completed successfully."
+fi
