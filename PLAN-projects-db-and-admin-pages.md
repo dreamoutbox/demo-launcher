@@ -60,15 +60,15 @@ Build/test: `pnpm test` (Vitest), `pnpm types` if `wrangler.jsonc` bindings chan
   - [x] Write unit/integration tests in `test/index.spec.ts` covering: valid/invalid project import, secret field preservation in DB vs public sanitization in `GET /api/projects`, resetting projects table while keeping `project_demos` droplet records intact, and destroying a droplet by ID via `/api/admin/droplets/destroy`.
 - Done when: `pnpm test` passes and `./dev-import-projects.sh` / `./dev-reset-projects.sh` work against local dev.
 
-### Phase 4: Admin Page for Viewing & Destroying Created Droplets [STATUS: TODO]
+### Phase 4: Admin Page for Viewing & Destroying Created Droplets [STATUS: DONE]
 - Goal: Add `/admin/droplets` (`public/admin/droplets.html` + `public/admin/droplets.js`) to list all droplets from the DigitalOcean API and destroy any droplet.
 - Tasks:
-  - [ ] Create `public/admin/droplets.html` and `public/admin/droplets.js` using `public/main.css` and `<admin-nav></admin-nav>`:
+  - [x] Create `public/admin/droplets.html` and `public/admin/droplets.js` using `public/main.css` and `<admin-nav></admin-nav>`:
     - Fetches `GET /api/admin/droplets` with `x-admin-key`.
     - Displays table columns: Droplet ID, Status, Public IP, Tags (rendered as `.code-pill`), Linked Project (matched from tags or `project_demos`), and Action (`Destroy` button).
     - Clicking `Destroy` confirms with the admin, calls `POST /api/admin/droplets/destroy` with `{ dropletId }`, shows status feedback, and refreshes the table.
-  - [ ] Add friendly redirect `/admin/droplets` -> `/admin/droplets.html` in `src/index.ts`.
-  - [ ] Update `public/admin/navbar.js` to include the `Droplets` link.
+  - [x] Add friendly redirect `/admin/droplets` -> `/admin/droplets.html` in `src/index.ts`.
+  - [x] Update `public/admin/navbar.js` to include the `Droplets` link.
 - Done when: Navigating to `/admin/droplets` lists droplets from `GET /api/admin/droplets` and destroys a droplet on click; `pnpm test` passes.
 
 ### Phase 5: Admin Page for Importing `projects.json` to DB [STATUS: TODO]

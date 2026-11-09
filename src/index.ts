@@ -597,6 +597,12 @@ export default {
 		if (pathname === '/admin/demo_list' || pathname === '/admin/demo_list/') {
 			return Response.redirect(`${url.origin}/admin/demo_list.html`, 301);
 		}
+		if (pathname === '/admin/droplets' || pathname === '/admin/droplets/') {
+			return Response.redirect(`${url.origin}/admin/droplets.html`, 301);
+		}
+		if (pathname === '/admin/import_projects' || pathname === '/admin/import_projects/') {
+			return Response.redirect(`${url.origin}/admin/import_projects.html`, 301);
+		}
 
 		// Serve static assets if ASSETS binding is available
 		if (env.ASSETS) {

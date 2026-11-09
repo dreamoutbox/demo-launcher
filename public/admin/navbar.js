@@ -12,6 +12,8 @@ class AdminNav extends HTMLElement {
 		this.innerHTML = `
 			<nav class="admin-nav">
 				<a href="/admin/demo_list.html">Demo List</a>
+				<a href="/admin/droplets.html">Droplets</a>
+				<a href="/admin/import_projects.html">Import Projects</a>
 				<a href="/admin/action_log.html">Action Logs</a>
 				<button type="button" class="btn-sm admin-nav-logout">Logout</button>
 			</nav>

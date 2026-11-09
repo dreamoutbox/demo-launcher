@@ -1817,4 +1817,20 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 			.first<ActionLogRecord>();
 		expect(log?.status).toBe(ActionStatus.SUCCESS);
 	});
+
+	it('40. GET /admin/droplets and /admin/import_projects redirect to their HTML files', async () => {
+		const req1 = new Request('http://localhost/admin/droplets', { method: 'GET', redirect: 'manual' });
+		const ctx1 = createExecutionContext();
+		const res1 = await worker.fetch(req1 as any, testEnv, ctx1);
+		await waitOnExecutionContext(ctx1);
+		expect(res1.status).toBe(301);
+		expect(res1.headers.get('Location')).toBe('http://localhost/admin/droplets.html');
+
+		const req2 = new Request('http://localhost/admin/import_projects', { method: 'GET', redirect: 'manual' });
+		const ctx2 = createExecutionContext();
+		const res2 = await worker.fetch(req2 as any, testEnv, ctx2);
+		await waitOnExecutionContext(ctx2);
+		expect(res2.status).toBe(301);
+		expect(res2.headers.get('Location')).toBe('http://localhost/admin/import_projects.html');
+	});
 });

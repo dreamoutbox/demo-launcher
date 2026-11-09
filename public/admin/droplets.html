@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Created Droplets - Demo Launcher Admin</title>
+  <link rel="stylesheet" href="/main.css" />
+</head>
+
+<body>
+  <div class="container container-wide">
+    <admin-nav></admin-nav>
+
+    <h1>Created Droplets</h1>
+
+    <div class="table-toolbar">
+      <span id="droplets-status" class="toolbar-message">Loading droplets...</span>
+      <button type="button" id="refresh-btn">Refresh</button>
+    </div>
+
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Droplet ID</th>
+            <th>Status</th>
+            <th>Public IP</th>
+            <th>Tags</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="droplets-tbody">
+          <tr>
+            <td colspan="5">Loading droplets...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script type="module" src="/admin/navbar.js"></script>
+  <script type="module" src="/admin/droplets.js"></script>
+</body>
+
+</html>
