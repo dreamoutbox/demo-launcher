@@ -8,7 +8,15 @@ import {
 } from 'cloudflare:test';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import worker from '../src/index';
-import projects from '../src/projects.json';
+import projectsTemplate from '../projects.template.json';
+import {
+	getProjectByIdFromDb,
+	getProjectsFromDb,
+	importProjectsToDb,
+	resetProjectsTable,
+	sanitizeProjectForPublic,
+	validateProjectsJson,
+} from '../src/projects-db';
 import { DigitalOceanMockService, resetMockDroplets } from '../src/digitalocean.mock';
 import { DigitalOceanProdService, DEFAULT_FIREWALL_INBOUND_RULES, DEFAULT_FIREWALL_OUTBOUND_RULES } from '../src/digitalocean.prod';
 import { DigitalOceanApiError } from '../src/digitalocean-error';
@@ -34,10 +42,24 @@ import { ActionLogRecord, ActionStatus, ActionType, DemoStatus, Env, LaunchPhase
 const testEnv = env as unknown as Env;
 
 describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
-	const testProject = projects[0]; // e.g., "awesome-shop-demo"
+	const projects = projectsTemplate;
+	const testProject = projects[0]; // e.g., "pgvisor"
 
 	beforeEach(async () => {
 		// Reset and recreate the D1 tables in local memory before each test
+		await testEnv.mydb.prepare('DROP TABLE IF EXISTS projects').run();
+		await testEnv.mydb
+			.prepare(
+				`CREATE TABLE projects (
+                    id TEXT PRIMARY KEY,
+                    data TEXT NOT NULL,
+                    updated_at INTEGER NOT NULL
+                )`,
+			)
+			.run();
+
+		await importProjectsToDb(testEnv, projectsTemplate);
+
 		await testEnv.mydb.prepare('DROP TABLE IF EXISTS project_demos').run();
 		await testEnv.mydb
 			.prepare(
@@ -1471,5 +1493,160 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 
 		expect(result.explicitAcks).toEqual(['msg-limit-test']);
 		expect(createDropletSpy).not.toHaveBeenCalled();
+	});
+
+	it('32. validateProjectsJson and sanitizeProjectForPublic helpers', () => {
+		// Valid array
+		const validRes = validateProjectsJson([
+			{
+				id: 'test-app',
+				name: 'Test App',
+				repoUrl: 'https://github.com/example/test-app',
+				branch: 'main',
+				appPort: '8080',
+				healthcheckPort: '8080',
+				healthcheckPath: '/healthz',
+				size: 's-1vcpu-1gb',
+				firewallPorts: ['8080'],
+				mySecretKey: 'super-secret-value',
+			},
+		]);
+		expect(validRes.valid).toBe(true);
+		if (validRes.valid) {
+			expect(validRes.projects[0].id).toBe('test-app');
+			expect(validRes.projects[0].mySecretKey).toBe('super-secret-value');
+
+			// Sanitization removes secret fields
+			const sanitized = sanitizeProjectForPublic(validRes.projects[0]);
+			expect(sanitized.id).toBe('test-app');
+			expect(sanitized.name).toBe('Test App');
+			expect((sanitized as any).mySecretKey).toBeUndefined();
+		}
+
+		// Valid object with projects array property
+		expect(validateProjectsJson({ projects: [{ id: 'a', name: 'A', repoUrl: 'https://example.com' }] }).valid).toBe(true);
+
+		// Invalid inputs
+		expect(validateProjectsJson([]).valid).toBe(false);
+		expect(validateProjectsJson(null).valid).toBe(false);
+		expect(validateProjectsJson('invalid').valid).toBe(false);
+		expect(validateProjectsJson([{ name: 'No ID', repoUrl: 'https://example.com' }]).valid).toBe(false);
+		expect(validateProjectsJson([{ id: 'bad id with spaces', name: 'A', repoUrl: 'https://example.com' }]).valid).toBe(false);
+		expect(validateProjectsJson([{ id: 'a', repoUrl: 'https://example.com' }]).valid).toBe(false);
+		expect(validateProjectsJson([{ id: 'a', name: 'A', repoUrl: 'not-a-url' }]).valid).toBe(false);
+		expect(validateProjectsJson([{ id: 'a', name: 'A', repoUrl: 'ftp://example.com' }]).valid).toBe(false);
+		expect(validateProjectsJson([{ id: 'a', name: 'A', repoUrl: 'https://example.com', branch: '; rm -rf /' }]).valid).toBe(false);
+		expect(validateProjectsJson([{ id: 'a', name: 'A', repoUrl: 'https://example.com', healthcheckPort: '999999' }]).valid).toBe(false);
+		expect(validateProjectsJson([{ id: 'a', name: 'A', repoUrl: 'https://example.com', healthcheckPath: 'no-slash' }]).valid).toBe(false);
+		expect(validateProjectsJson([{ id: 'a', name: 'A', repoUrl: 'https://example.com', firewallPorts: 'invalid-port' }]).valid).toBe(false);
+		expect(validateProjectsJson([
+			{ id: 'dup', name: 'A', repoUrl: 'https://example.com' },
+			{ id: 'dup', name: 'B', repoUrl: 'https://example.com' },
+		]).valid).toBe(false);
+	});
+
+	it('33. DB operations: importProjectsToDb, getProjectsFromDb, getProjectByIdFromDb, resetProjectsTable', async () => {
+		await testEnv.mydb.prepare('DELETE FROM projects').run();
+
+		const testData = [
+			{
+				id: 'custom-proj-1',
+				name: 'Custom 1',
+				repoUrl: 'https://github.com/example/one',
+				secretToken: 'token-123',
+			},
+			{
+				id: 'custom-proj-2',
+				name: 'Custom 2',
+				repoUrl: 'https://github.com/example/two',
+			},
+		];
+
+		const imported = await importProjectsToDb(testEnv, testData);
+		expect(imported.length).toBe(2);
+
+		const all = await getProjectsFromDb(testEnv);
+		expect(all.length).toBe(2);
+		expect(all[0].id).toBe('custom-proj-1');
+		expect(all[0].secretToken).toBe('token-123');
+
+		const single = await getProjectByIdFromDb(testEnv, 'custom-proj-1');
+		expect(single).not.toBeNull();
+		expect(single?.name).toBe('Custom 1');
+
+		const missing = await getProjectByIdFromDb(testEnv, 'nonexistent');
+		expect(missing).toBeNull();
+
+		const resetResult = await resetProjectsTable(testEnv);
+		expect(resetResult.deletedCount).toBe(2);
+
+		const afterReset = await getProjectsFromDb(testEnv);
+		expect(afterReset.length).toBe(0);
+	});
+
+	it('34. GET /api/projects should return sanitized project configurations while DB preserves extra secret fields', async () => {
+		await testEnv.mydb.prepare('DELETE FROM projects').run();
+		await importProjectsToDb(testEnv, [
+			{
+				id: 'secure-project',
+				name: 'Secure Project',
+				repoUrl: 'https://github.com/example/secure',
+				apiKey: 'top-secret-key-do-not-leak',
+			},
+		]);
+
+		const req = new Request('http://localhost/api/projects', { method: 'GET' });
+		const ctx = createExecutionContext();
+		const res = await worker.fetch(req as any, testEnv, ctx);
+		await waitOnExecutionContext(ctx);
+
+		expect(res.status).toBe(200);
+		const data = (await res.json()) as { projects: Array<Record<string, unknown>> };
+		expect(data.projects.length).toBe(1);
+		expect(data.projects[0].id).toBe('secure-project');
+		expect(data.projects[0].name).toBe('Secure Project');
+		expect(data.projects[0].apiKey).toBeUndefined();
+
+		// Verify database still holds the secret
+		const fromDb = await getProjectByIdFromDb(testEnv, 'secure-project');
+		expect(fromDb?.apiKey).toBe('top-secret-key-do-not-leak');
+	});
+
+	it('35. POST /api/admin/stop should successfully stop a project even after the projects table has been reset', async () => {
+		const deleteDropletSpy = vi.spyOn(DigitalOceanMockService.prototype, 'deleteDroplet');
+
+		// Seed a running demo in project_demos
+		await testEnv.mydb
+			.prepare(
+				`INSERT INTO project_demos (project_id, status, droplet_id, droplet_ip, launched_at)
+                 VALUES ('orphaned-project', 'RUNNING', 771122, '192.0.2.77', ?1)`,
+			)
+			.bind(Date.now())
+			.run();
+
+		// Reset the projects table so 'orphaned-project' is not in projects table
+		await resetProjectsTable(testEnv);
+		expect(await getProjectByIdFromDb(testEnv, 'orphaned-project')).toBeNull();
+
+		// Admin stop should still succeed using project_demos record
+		const req = new Request('http://localhost/api/admin/stop', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', 'x-admin-key': 'test-admin-key' },
+			body: JSON.stringify({ projectId: 'orphaned-project' }),
+		});
+
+		const ctx = createExecutionContext();
+		const res = await worker.fetch(req as any, testEnv, ctx);
+		await waitOnExecutionContext(ctx);
+
+		expect(res.status).toBe(200);
+		expect(deleteDropletSpy).toHaveBeenCalledWith(771122);
+
+		const demoRow = await testEnv.mydb
+			.prepare('SELECT status, droplet_id FROM project_demos WHERE project_id = ?1')
+			.bind('orphaned-project')
+			.first<{ status: string; droplet_id: number | null }>();
+		expect(demoRow?.status).toBe(DemoStatus.STOPPED);
+		expect(demoRow?.droplet_id).toBeNull();
 	});
 });

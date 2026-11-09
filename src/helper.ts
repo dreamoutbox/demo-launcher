@@ -225,7 +225,7 @@ export function parsePortList(input?: string | string[] | null): string[] {
 export function buildFirewallInboundRules(
     defaultRules: FirewallInboundRule[],
     extraPortsEnv?: string | null,
-    projectEntries?: Array<{ firewallPorts?: string[] }> | null,
+    projectEntries?: Array<{ firewallPorts?: string | string[] }> | null,
 ): FirewallInboundRule[] {
     const rules: FirewallInboundRule[] = defaultRules.map((r) => ({
         protocol: r.protocol,

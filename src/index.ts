@@ -1,5 +1,5 @@
-import projects from './projects.json';
 import { getDigitalOceanService } from './digitalocean';
+import { getProjectByIdFromDb, getProjectsFromDb, sanitizeProjectForPublic } from './projects-db';
 import {
 	countActiveDemos,
 	createTurnstileErrorResponse,
@@ -98,20 +98,23 @@ export default {
 		// GET /api/projects -> List available projects and their current live demo status + uptime
 		if (pathname === '/api/projects' && req.method === 'GET') {
 			const now = Date.now();
-			const { results } = await env.mydb.prepare('SELECT * FROM project_demos').all<{
-				project_id: string;
-				status: DemoStatus;
-				droplet_id: number | null;
-				droplet_ip: string | null;
-				tags: string | null;
-				launched_at: number | null;
-			}>();
+			const [dbProjects, { results }] = await Promise.all([
+				getProjectsFromDb(env),
+				env.mydb.prepare('SELECT * FROM project_demos').all<{
+					project_id: string;
+					status: DemoStatus;
+					droplet_id: number | null;
+					droplet_ip: string | null;
+					tags: string | null;
+					launched_at: number | null;
+				}>(),
+			]);
 
 			const statusesWithUptime = results.map((row) => {
 				const isRunning = row.status === DemoStatus.RUNNING && row.launched_at !== null;
 				const uptimeMs = isRunning ? Math.max(0, now - row.launched_at!) : null;
 
-				const appPort = projects.find((p) => p.id === row.project_id)?.appPort ?? null;
+				const appPort = dbProjects.find((p) => p.id === row.project_id)?.appPort ?? null;
 
 				return {
 					...row,
@@ -123,7 +126,7 @@ export default {
 			});
 
 			return Response.json({
-				projects,
+				projects: dbProjects.map(sanitizeProjectForPublic),
 				statuses: statusesWithUptime,
 				maxDemoTimeSeconds: getMaxDemoTimeMs(env) / 1000,
 				turnstileSiteKey: env.TURNSTILE_SITE_KEY || '1x00000000000000000000AA',
@@ -206,11 +209,25 @@ export default {
 			}
 
 			const projectId = body?.projectId;
-			const project = projects.find((p) => p.id === projectId);
+			if (!projectId) {
+				await recordActionLog(env, {
+					action: ActionType.LAUNCH_DEMO,
+					projectId: null,
+					ipAddress: clientInfo.ipAddress,
+					country: clientInfo.country,
+					userAgent: clientInfo.userAgent,
+					status: ActionStatus.REJECTED,
+					details: JSON.stringify({ error: 'Missing projectId' }),
+				});
+
+				return Response.json({ error: 'Missing projectId' }, { status: 400 });
+			}
+
+			const project = await getProjectByIdFromDb(env, projectId);
 			if (!project) {
 				await recordActionLog(env, {
 					action: ActionType.LAUNCH_DEMO,
-					projectId: projectId ?? null,
+					projectId: projectId,
 					ipAddress: clientInfo.ipAddress,
 					country: clientInfo.country,
 					userAgent: clientInfo.userAgent,
@@ -276,15 +293,21 @@ export default {
 			const clientInfo = extractClientInfo(req);
 			const body = (await req.json().catch(() => null)) as { projectId?: string } | null;
 			const projectId = body?.projectId;
-
-			if (!projectId || !projects.some((p) => p.id === projectId)) {
-				return Response.json({ error: 'Invalid or unknown projectId' }, { status: 400 });
+			if (!projectId) {
+				return Response.json({ error: 'Missing projectId' }, { status: 400 });
 			}
 
-			const row = await env.mydb
-				.prepare('SELECT droplet_id FROM project_demos WHERE project_id = ?1')
-				.bind(projectId)
-				.first<{ droplet_id: number | null }>();
+			const [projectInDb, row] = await Promise.all([
+				getProjectByIdFromDb(env, projectId),
+				env.mydb
+					.prepare('SELECT droplet_id FROM project_demos WHERE project_id = ?1')
+					.bind(projectId)
+					.first<{ droplet_id: number | null }>(),
+			]);
+
+			if (!projectInDb && !row) {
+				return Response.json({ error: 'Invalid or unknown projectId' }, { status: 400 });
+			}
 
 			try {
 				await stopDemo(env, getDigitalOceanService(env, req.url), projectId, row?.droplet_id ?? null);

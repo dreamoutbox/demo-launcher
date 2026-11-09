@@ -28,22 +28,22 @@ Build/test: `pnpm test` (Vitest), `pnpm types` if `wrangler.jsonc` bindings chan
   - [x] Add migration file `migrations-manual/0003_create_projects_table.sql` and update `dev-migrate.sh` and `dev-reset-local.sh` to include the `projects` table.
 - Done when: `./dev-migrate.sh --local` succeeds and creates the `projects` table; `projects.json` is ignored by `git status`.
 
-### Phase 2: Project Repository, Validation, Import & Reset Functions, and Runtime DB Lookup [STATUS: TODO]
+### Phase 2: Project Repository, Validation, Import & Reset Functions, and Runtime DB Lookup [STATUS: DONE]
 - Goal: Replace static `src/projects.json` imports across the Worker with D1 queries and a reusable validation/import module.
 - Tasks:
-  - [ ] Create `src/projects-db.ts` (or functions in `src/helper.ts`) with:
+  - [x] Create `src/projects-db.ts` (or functions in `src/helper.ts`) with:
     - `ProjectConfig` type definition (`id`, `name`, `repoUrl`, `branch`, `healthcheckPort`, `healthcheckPath`, `appPort`, `size`, `firewallPorts`, plus `[key: string]: unknown` for extra/secret fields).
     - `validateProjectsJson(input: unknown): { valid: true; projects: ProjectConfig[] } | { valid: false; error: string }` — validates non-empty array (or array of project objects), unique non-empty `id`, required `name` and valid `repoUrl`, optional `branch` (`isValidGitBranch`), `appPort`/`healthcheckPort`/`firewallPorts` (`isValidPortOrRange` / `parsePortList`), and `size`.
     - `importProjectsToDb(env: Env, rawJsonOrArray: unknown): Promise<ProjectConfig[]>` — validates input and upserts (`INSERT OR REPLACE INTO projects (id, data, updated_at)`) all records in a D1 batch, storing the full JSON object in `data`.
     - `resetProjectsTable(env: Env): Promise<{ deletedCount: number }>` — executes `DELETE FROM projects` without deleting `project_demos` droplet records or DigitalOcean droplets.
     - `getProjectsFromDb(env: Env): Promise<ProjectConfig[]>` and `getProjectByIdFromDb(env: Env, projectId: string): Promise<ProjectConfig | null>`.
     - `sanitizeProjectForPublic(project: ProjectConfig)` — returns only public display/launch fields (`id`, `name`, `repoUrl`, `branch`, `healthcheckPort`, `healthcheckPath`, `appPort`, `size`, `firewallPorts`), stripping any secret fields for `GET /api/projects`.
-  - [ ] Update `src/index.ts`, `src/launcher.ts`, and `src/digitalocean.ts` to read projects from D1 instead of `src/projects.json`:
+  - [x] Update `src/index.ts`, `src/launcher.ts`, and `src/digitalocean.ts` to read projects from D1 instead of `src/projects.json`:
     - `GET /api/projects`: fetch projects from `getProjectsFromDb(env)`, sanitize for public response.
     - `POST /api/launch`: look up project via `getProjectByIdFromDb(env, projectId)`.
     - `POST /api/admin/stop`: allow stopping any `projectId` present in `projects` OR `project_demos` (so demos from before a project reset can still be stopped).
     - `ProjectLauncher.launch` & `pollAndHealth`: fetch project from D1 and pass project list (or firewall ports) to `getDigitalOceanService`.
-  - [ ] Delete `src/projects.json` and update `test/index.spec.ts` `beforeEach` to create the `projects` table and seed test projects via `importProjectsToDb`.
+  - [x] Delete `src/projects.json` and update `test/index.spec.ts` `beforeEach` to create the `projects` table and seed test projects via `importProjectsToDb`.
 - Done when: `src/projects.json` is deleted, all Worker code reads projects from D1, and `pnpm test` passes.
 
 ### Phase 3: Admin API Endpoints & CLI Shell Scripts (Import & Reset) [STATUS: TODO]

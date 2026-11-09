@@ -1,7 +1,6 @@
 import { DigitalOceanMockService } from './digitalocean.mock';
 import { DEFAULT_FIREWALL_INBOUND_RULES, DigitalOceanProdService } from './digitalocean.prod';
 import { buildFirewallInboundRules, isDevelopment } from './helper';
-import projects from './projects.json';
 import { DropletInfo, Env, IDigitalOceanService as BaseIDigitalOceanService } from './types';
 
 export { isDevelopment };
@@ -51,18 +50,23 @@ export function isRealApiEnabled(env: Env): boolean {
  *
  * @param env - Worker environment bindings
  * @param requestUrl - Optional incoming request URL used to detect localhost
+ * @param projectEntries - Optional project list used to determine per-project firewall inbound ports
  * @returns DigitalOcean service instance
  *
  * @example
  * ```ts
- * const doService = getDigitalOceanService(env, request.url);
+ * const doService = getDigitalOceanService(env, request.url, projects);
  * ```
  */
-export function getDigitalOceanService(env: Env, requestUrl?: string): IDigitalOceanService {
+export function getDigitalOceanService(
+	env: Env,
+	requestUrl?: string,
+	projectEntries?: Array<{ firewallPorts?: string | string[] }>,
+): IDigitalOceanService {
 	const inboundRules = buildFirewallInboundRules(
 		DEFAULT_FIREWALL_INBOUND_RULES,
 		(env as any).DO_FIREWALL_EXTRA_INBOUND_PORTS,
-		projects,
+		projectEntries ?? [],
 	);
 	const config = {
 		region: env.DO_REGION,

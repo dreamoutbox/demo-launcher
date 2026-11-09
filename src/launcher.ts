@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import projects from './projects.json';
+import { getProjectByIdFromDb, getProjectsFromDb } from './projects-db';
 import { getDigitalOceanService } from './digitalocean';
 import { DemoStatus, DropletInfo, Env, LaunchPhase } from './types';
 import { Mutex } from './mutex';
@@ -45,16 +45,16 @@ export class ProjectLauncher extends DurableObject<Env> {
 	 * Claims the project and creates its droplet. Returns as soon as DigitalOcean
 	 * accepts the create request, then enqueues a POLL_HEALTH message.
 	 *
-	 * @param projectId - Project ID from `src/projects.json`
+	 * @param projectId - Project ID from D1 `projects` table
 	 * @param maxInstancesLimit - Optional override for max concurrent instances limit
 	 *
 	 * @example
 	 * await stub.launch('go-pos');
 	 */
 	async launch(projectId: string, maxInstancesLimit?: number | null): Promise<void> {
-		const project = projects.find((p) => p.id === projectId);
+		const project = await getProjectByIdFromDb(this.env, projectId);
 		if (!project) {
-			console.error(`[DO] Project "${projectId}" not found in src/projects.json. Skipping.`);
+			console.error(`[DO] Project "${projectId}" not found in DB. Skipping.`);
 			return;
 		}
 
@@ -87,7 +87,8 @@ export class ProjectLauncher extends DurableObject<Env> {
 				return;
 			}
 
-			const doService = getDigitalOceanService(this.env);
+			const allProjects = await getProjectsFromDb(this.env);
+			const doService = getDigitalOceanService(this.env, undefined, allProjects);
 
 			// A previous process may have created a droplet before saving its id.
 			const existing = await this.findDroplet(doService, projectId, claim.attemptId);
@@ -170,7 +171,7 @@ export class ProjectLauncher extends DurableObject<Env> {
 				return;
 			}
 
-			const project = projects.find((p) => p.id === projectId);
+			const project = await getProjectByIdFromDb(this.env, projectId);
 			if (!project) {
 				await this.markFailed(projectId, attemptId);
 				return;
