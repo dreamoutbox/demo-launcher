@@ -1,5 +1,12 @@
 import { getDigitalOceanService } from './digitalocean';
-import { getProjectByIdFromDb, getProjectsFromDb, sanitizeProjectForPublic } from './projects-db';
+import {
+	getProjectByIdFromDb,
+	getProjectsFromDb,
+	importProjectsToDb,
+	resetProjectsTable,
+	sanitizeProjectForPublic,
+	validateProjectsJson,
+} from './projects-db';
 import {
 	countActiveDemos,
 	createTurnstileErrorResponse,
@@ -351,6 +358,152 @@ export default {
 				const message = err instanceof Error ? err.message : String(err);
 				return Response.json({ error: `Failed to list droplets: ${message}` }, { status: 500 });
 			}
+		}
+
+		// POST /api/admin/droplets/destroy -> Delete a specific droplet by ID and reset matching demo state (Admin Key protected)
+		if (pathname === '/api/admin/droplets/destroy' && req.method === 'POST') {
+			if (!isAdminAuthorized(req, env)) {
+				return Response.json({ error: 'Unauthorized: invalid or missing admin key' }, { status: 401 });
+			}
+
+			const clientInfo = extractClientInfo(req);
+			const body = (await req.json().catch(() => null)) as { dropletId?: number | string } | null;
+			const dropletId = Number(body?.dropletId);
+
+			if (!body?.dropletId || !Number.isFinite(dropletId) || dropletId <= 0) {
+				return Response.json({ error: 'Valid positive dropletId is required' }, { status: 400 });
+			}
+
+			try {
+				const doService = getDigitalOceanService(env, req.url);
+				await doService.deleteDroplet(dropletId);
+
+				// Reset any project_demos row matching this droplet_id
+				await env.mydb
+					.prepare(
+						`UPDATE project_demos
+                         SET status = 'STOPPED', droplet_id = NULL, droplet_ip = NULL, tags = NULL, launched_at = NULL, attempt_id = NULL
+                         WHERE droplet_id = ?1`,
+					)
+					.bind(dropletId)
+					.run();
+
+				await recordActionLog(env, {
+					action: ActionType.DESTROY_DROPLET,
+					projectId: null,
+					ipAddress: clientInfo.ipAddress,
+					country: clientInfo.country,
+					userAgent: clientInfo.userAgent,
+					status: ActionStatus.SUCCESS,
+					details: JSON.stringify({ dropletId }),
+				});
+
+				return Response.json({ message: `Droplet ${dropletId} destroyed successfully`, dropletId });
+			} catch (err) {
+				const message = err instanceof Error ? err.message : String(err);
+				await recordActionLog(env, {
+					action: ActionType.DESTROY_DROPLET,
+					projectId: null,
+					ipAddress: clientInfo.ipAddress,
+					country: clientInfo.country,
+					userAgent: clientInfo.userAgent,
+					status: ActionStatus.FAILED,
+					details: JSON.stringify({ dropletId, error: message }),
+				});
+				return Response.json({ error: `Failed to destroy droplet ${dropletId}: ${message}` }, { status: 500 });
+			}
+		}
+
+		// GET /api/admin/projects -> List all full stored projects from D1 (Admin Key protected)
+		if (pathname === '/api/admin/projects' && req.method === 'GET') {
+			if (!isAdminAuthorized(req, env)) {
+				return Response.json({ error: 'Unauthorized: invalid or missing admin key' }, { status: 401 });
+			}
+
+			const storedProjects = await getProjectsFromDb(env);
+			return Response.json({ projects: storedProjects, count: storedProjects.length });
+		}
+
+		// POST /api/admin/projects/import -> Validate and batch import projects to D1 (Admin Key protected)
+		if (pathname === '/api/admin/projects/import' && req.method === 'POST') {
+			if (!isAdminAuthorized(req, env)) {
+				return Response.json({ error: 'Unauthorized: invalid or missing admin key' }, { status: 401 });
+			}
+
+			const clientInfo = extractClientInfo(req);
+			const body = await req.json().catch(() => null);
+
+			const validation = validateProjectsJson(body);
+			if (!validation.valid) {
+				await recordActionLog(env, {
+					action: ActionType.IMPORT_PROJECTS,
+					projectId: null,
+					ipAddress: clientInfo.ipAddress,
+					country: clientInfo.country,
+					userAgent: clientInfo.userAgent,
+					status: ActionStatus.REJECTED,
+					details: JSON.stringify({ error: validation.error }),
+				});
+
+				return Response.json({ error: validation.error }, { status: 400 });
+			}
+
+			try {
+				const imported = await importProjectsToDb(env, validation.projects);
+				await recordActionLog(env, {
+					action: ActionType.IMPORT_PROJECTS,
+					projectId: null,
+					ipAddress: clientInfo.ipAddress,
+					country: clientInfo.country,
+					userAgent: clientInfo.userAgent,
+					status: ActionStatus.SUCCESS,
+					details: JSON.stringify({ count: imported.length }),
+				});
+
+				return Response.json({
+					message: `Successfully imported ${imported.length} project(s)`,
+					count: imported.length,
+					projects: imported,
+				});
+			} catch (err) {
+				const message = err instanceof Error ? err.message : String(err);
+				await recordActionLog(env, {
+					action: ActionType.IMPORT_PROJECTS,
+					projectId: null,
+					ipAddress: clientInfo.ipAddress,
+					country: clientInfo.country,
+					userAgent: clientInfo.userAgent,
+					status: ActionStatus.FAILED,
+					details: JSON.stringify({ error: message }),
+				});
+
+				return Response.json({ error: `Import failed: ${message}` }, { status: 500 });
+			}
+		}
+
+		// POST /api/admin/projects/reset -> Reset projects table in D1 without touching demos or droplets (Admin Key protected)
+		if (pathname === '/api/admin/projects/reset' && req.method === 'POST') {
+			if (!isAdminAuthorized(req, env)) {
+				return Response.json({ error: 'Unauthorized: invalid or missing admin key' }, { status: 401 });
+			}
+
+			const clientInfo = extractClientInfo(req);
+			const result = await resetProjectsTable(env);
+
+			await recordActionLog(env, {
+				action: ActionType.RESET_PROJECTS,
+				projectId: null,
+				ipAddress: clientInfo.ipAddress,
+				country: clientInfo.country,
+				userAgent: clientInfo.userAgent,
+				status: ActionStatus.SUCCESS,
+				details: JSON.stringify(result),
+			});
+
+			return Response.json({
+				message: `Projects table reset successfully. ${result.deletedCount} project(s) removed.`,
+				deletedCount: result.deletedCount,
+			});
 		}
 
 		// GET /api/admin/action-logs or /api/action-logs -> Retrieve audit logs (Admin Key protected)

@@ -46,18 +46,18 @@ Build/test: `pnpm test` (Vitest), `pnpm types` if `wrangler.jsonc` bindings chan
   - [x] Delete `src/projects.json` and update `test/index.spec.ts` `beforeEach` to create the `projects` table and seed test projects via `importProjectsToDb`.
 - Done when: `src/projects.json` is deleted, all Worker code reads projects from D1, and `pnpm test` passes.
 
-### Phase 3: Admin API Endpoints & CLI Shell Scripts (Import & Reset) [STATUS: TODO]
+### Phase 3: Admin API Endpoints & CLI Shell Scripts (Import & Reset) [STATUS: DONE]
 - Goal: Expose admin API routes for importing/listing/resetting projects and destroying droplets by ID, plus shell scripts for importing `projects.json` and resetting the `projects` table.
 - Tasks:
-  - [ ] Add `ActionType` enum members in `src/types.ts` (e.g., `IMPORT_PROJECTS = 'IMPORT_PROJECTS'`, `RESET_PROJECTS = 'RESET_PROJECTS'`, `DESTROY_DROPLET = 'DESTROY_DROPLET'`).
-  - [ ] In `src/index.ts`, add Admin Key protected endpoints:
+  - [x] Add `ActionType` enum members in `src/types.ts` (e.g., `IMPORT_PROJECTS = 'IMPORT_PROJECTS'`, `RESET_PROJECTS = 'RESET_PROJECTS'`, `DESTROY_DROPLET = 'DESTROY_DROPLET'`).
+  - [x] In `src/index.ts`, add Admin Key protected endpoints:
     - `GET /api/admin/projects` — returns full stored projects from D1 (unsanitized, for admin view).
     - `POST /api/admin/projects/import` — accepts raw JSON array or `{ projects: ... }`, runs `importProjectsToDb(env, body)`, logs action to `action_logs`, and returns `{ message, count, projects }` (or `400` with validation error details).
     - `POST /api/admin/projects/reset` — runs `resetProjectsTable(env)`, logs action, and returns `{ message, deletedCount }`.
     - `POST /api/admin/droplets/destroy` (or `DELETE /api/admin/droplets/:id`) — accepts `{ dropletId: number }`, calls `doService.deleteDroplet(dropletId)`, resets any matching `project_demos` row where `droplet_id = ?1` to `STOPPED`, logs action, and returns `{ message, dropletId }`.
-  - [ ] Create `./dev-import-projects.sh` — reads `./projects.json` (or file path arg) and POSTs to `/api/admin/projects/import` (or supports `--local`/`--remote` via API / D1).
-  - [ ] Create `./dev-reset-projects.sh` — clears the `projects` table via `/api/admin/projects/reset` (or `wrangler d1 execute mydb --command="DELETE FROM projects;"`) while preserving `project_demos` and created droplets.
-  - [ ] Write unit/integration tests in `test/index.spec.ts` covering: valid/invalid project import, secret field preservation in DB vs public sanitization in `GET /api/projects`, resetting projects table while keeping `project_demos` droplet records intact, and destroying a droplet by ID via `/api/admin/droplets/destroy`.
+  - [x] Create `./dev-import-projects.sh` — reads `./projects.json` (or file path arg) and POSTs to `/api/admin/projects/import` (or supports `--local`/`--remote` via API / D1).
+  - [x] Create `./dev-reset-projects.sh` — clears the `projects` table via `/api/admin/projects/reset` (or `wrangler d1 execute mydb --command="DELETE FROM projects;"`) while preserving `project_demos` and created droplets.
+  - [x] Write unit/integration tests in `test/index.spec.ts` covering: valid/invalid project import, secret field preservation in DB vs public sanitization in `GET /api/projects`, resetting projects table while keeping `project_demos` droplet records intact, and destroying a droplet by ID via `/api/admin/droplets/destroy`.
 - Done when: `pnpm test` passes and `./dev-import-projects.sh` / `./dev-reset-projects.sh` work against local dev.
 
 ### Phase 4: Admin Page for Viewing & Destroying Created Droplets [STATUS: TODO]

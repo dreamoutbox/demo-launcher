@@ -44,6 +44,9 @@ export interface QueueMessage {
 export enum ActionType {
 	LAUNCH_DEMO = 'LAUNCH_DEMO',
 	STOP_DEMO = 'STOP_DEMO',
+	IMPORT_PROJECTS = 'IMPORT_PROJECTS',
+	RESET_PROJECTS = 'RESET_PROJECTS',
+	DESTROY_DROPLET = 'DESTROY_DROPLET',
 }
 
 export enum ActionStatus {

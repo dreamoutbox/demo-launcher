@@ -1649,4 +1649,172 @@ describe('GitHub Project Demo Launcher (Local Worker Tests)', () => {
 		expect(demoRow?.status).toBe(DemoStatus.STOPPED);
 		expect(demoRow?.droplet_id).toBeNull();
 	});
+
+	it('36. GET /api/admin/projects should require admin key and return full projects', async () => {
+		// Unauthorized
+		const unauthReq = new Request('http://localhost/api/admin/projects', { method: 'GET' });
+		const ctx1 = createExecutionContext();
+		const unauthRes = await worker.fetch(unauthReq as any, testEnv, ctx1);
+		await waitOnExecutionContext(ctx1);
+		expect(unauthRes.status).toBe(401);
+
+		// Authorized
+		const authReq = new Request('http://localhost/api/admin/projects', {
+			method: 'GET',
+			headers: { 'x-admin-key': 'test-admin-key' },
+		});
+		const ctx2 = createExecutionContext();
+		const authRes = await worker.fetch(authReq as any, testEnv, ctx2);
+		await waitOnExecutionContext(ctx2);
+		expect(authRes.status).toBe(200);
+		const data = (await authRes.json()) as { projects: ProjectConfig[]; count: number };
+		expect(data.count).toBeGreaterThan(0);
+		expect(data.projects.length).toBe(data.count);
+	});
+
+	it('37. POST /api/admin/projects/import should validate input, update D1, and record audit log', async () => {
+		// Unauthorized
+		const unauthReq = new Request('http://localhost/api/admin/projects/import', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify([{ id: 'unauth', name: 'Unauth', repoUrl: 'https://example.com' }]),
+		});
+		const ctx1 = createExecutionContext();
+		const unauthRes = await worker.fetch(unauthReq as any, testEnv, ctx1);
+		await waitOnExecutionContext(ctx1);
+		expect(unauthRes.status).toBe(401);
+
+		// Invalid body -> 400
+		const badReq = new Request('http://localhost/api/admin/projects/import', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', 'x-admin-key': 'test-admin-key' },
+			body: JSON.stringify([{ id: 'missing-repo', name: 'No Repo' }]),
+		});
+		const ctx2 = createExecutionContext();
+		const badRes = await worker.fetch(badReq as any, testEnv, ctx2);
+		await waitOnExecutionContext(ctx2);
+		expect(badRes.status).toBe(400);
+		const badData = (await badRes.json()) as { error: string };
+		expect(badData.error).toContain('repoUrl');
+
+		// Valid body -> 200
+		const validProjects = [
+			{
+				id: 'imported-app',
+				name: 'Imported App',
+				repoUrl: 'https://github.com/example/imported',
+				branch: 'develop',
+				secretToken: 'shhh',
+			},
+		];
+		const goodReq = new Request('http://localhost/api/admin/projects/import', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', 'x-admin-key': 'test-admin-key' },
+			body: JSON.stringify(validProjects),
+		});
+		const ctx3 = createExecutionContext();
+		const goodRes = await worker.fetch(goodReq as any, testEnv, ctx3);
+		await waitOnExecutionContext(ctx3);
+		expect(goodRes.status).toBe(200);
+		const goodData = (await goodRes.json()) as { message: string; count: number };
+		expect(goodData.count).toBe(1);
+
+		const fromDb = await getProjectByIdFromDb(testEnv, 'imported-app');
+		expect(fromDb?.name).toBe('Imported App');
+		expect(fromDb?.secretToken).toBe('shhh');
+
+		// Verify action log
+		const log = await testEnv.mydb
+			.prepare("SELECT * FROM action_logs WHERE action = 'IMPORT_PROJECTS' ORDER BY id DESC LIMIT 1")
+			.first<ActionLogRecord>();
+		expect(log?.status).toBe(ActionStatus.SUCCESS);
+	});
+
+	it('38. POST /api/admin/projects/reset should delete all projects and log action', async () => {
+		// Unauthorized
+		const unauthReq = new Request('http://localhost/api/admin/projects/reset', { method: 'POST' });
+		const ctx1 = createExecutionContext();
+		const unauthRes = await worker.fetch(unauthReq as any, testEnv, ctx1);
+		await waitOnExecutionContext(ctx1);
+		expect(unauthRes.status).toBe(401);
+
+		// Authorized
+		const authReq = new Request('http://localhost/api/admin/projects/reset', {
+			method: 'POST',
+			headers: { 'x-admin-key': 'test-admin-key' },
+		});
+		const ctx2 = createExecutionContext();
+		const authRes = await worker.fetch(authReq as any, testEnv, ctx2);
+		await waitOnExecutionContext(ctx2);
+		expect(authRes.status).toBe(200);
+		const data = (await authRes.json()) as { deletedCount: number };
+		expect(data.deletedCount).toBeGreaterThan(0);
+
+		const remaining = await getProjectsFromDb(testEnv);
+		expect(remaining.length).toBe(0);
+
+		const log = await testEnv.mydb
+			.prepare("SELECT * FROM action_logs WHERE action = 'RESET_PROJECTS' ORDER BY id DESC LIMIT 1")
+			.first<ActionLogRecord>();
+		expect(log?.status).toBe(ActionStatus.SUCCESS);
+	});
+
+	it('39. POST /api/admin/droplets/destroy should delete droplet in DO and reset project_demos status to STOPPED', async () => {
+		const deleteDropletSpy = vi.spyOn(DigitalOceanMockService.prototype, 'deleteDroplet');
+
+		// Seed a demo tied to droplet 998877
+		await testEnv.mydb
+			.prepare(
+				`INSERT INTO project_demos (project_id, status, droplet_id, droplet_ip, launched_at)
+                 VALUES ('droplet-test-proj', 'RUNNING', 998877, '192.0.2.99', ?1)`,
+			)
+			.bind(Date.now())
+			.run();
+
+		// Unauthorized
+		const unauthReq = new Request('http://localhost/api/admin/droplets/destroy', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ dropletId: 998877 }),
+		});
+		const ctx1 = createExecutionContext();
+		const unauthRes = await worker.fetch(unauthReq as any, testEnv, ctx1);
+		await waitOnExecutionContext(ctx1);
+		expect(unauthRes.status).toBe(401);
+
+		// Missing/invalid dropletId
+		const invalidReq = new Request('http://localhost/api/admin/droplets/destroy', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', 'x-admin-key': 'test-admin-key' },
+			body: JSON.stringify({ dropletId: 'not-a-number' }),
+		});
+		const ctx2 = createExecutionContext();
+		const invalidRes = await worker.fetch(invalidReq as any, testEnv, ctx2);
+		await waitOnExecutionContext(ctx2);
+		expect(invalidRes.status).toBe(400);
+
+		// Authorized valid destruction
+		const authReq = new Request('http://localhost/api/admin/droplets/destroy', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', 'x-admin-key': 'test-admin-key' },
+			body: JSON.stringify({ dropletId: 998877 }),
+		});
+		const ctx3 = createExecutionContext();
+		const authRes = await worker.fetch(authReq as any, testEnv, ctx3);
+		await waitOnExecutionContext(ctx3);
+		expect(authRes.status).toBe(200);
+		expect(deleteDropletSpy).toHaveBeenCalledWith(998877);
+
+		const demoRow = await testEnv.mydb
+			.prepare('SELECT status, droplet_id FROM project_demos WHERE project_id = ?1')
+			.bind('droplet-test-proj')
+			.first<{ status: string; droplet_id: number | null }>();
+		expect(demoRow?.status).toBe(DemoStatus.STOPPED);
+		expect(demoRow?.droplet_id).toBeNull();
+
+		const log = await testEnv.mydb
+			.prepare("SELECT * FROM action_logs WHERE action = 'DESTROY_DROPLET' ORDER BY id DESC LIMIT 1")
+			.first<ActionLogRecord>();
+		expect(log?.status).toBe(ActionStatus.SUCCESS);
+	});
 });
