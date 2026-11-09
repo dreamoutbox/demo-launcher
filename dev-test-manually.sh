@@ -3,7 +3,7 @@ set -euo pipefail
 
 PORT=8787
 BASE_URL="http://localhost:${PORT}"
-PROJECT_ID="awesome-shop-demo"
+PROJECT_ID="go-pos"
 
 # Helper functions for clean logging and assertions
 log_step() {
@@ -51,6 +51,9 @@ for i in {1..30}; do
     fi
     sleep 1
 done
+
+log_step "2b. Importing projects.template.json into D1 database..."
+./dev-import-projects.sh ./projects.template.json
 
 # 3. Launch the demo project
 log_step "3. Verifying POST /api/launch rejects request without Turnstile token..."

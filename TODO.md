@@ -46,17 +46,17 @@
 
 #### we will now store projects.json inside DB instead
 
-- [ ] user will now copy projects.template.json -> rename to projects.json.
+- [x] user will now copy projects.template.json -> rename to projects.json.
 
-- [ ] gitignore projects.json
+- [x] gitignore projects.json
 
-- [ ] add shell script to read projects.json and insert records to DB. store every field in json. secret are okay to store. the import function should be separate function for use in admin page.
+- [x] add shell script to read projects.json and insert records to DB. store every field in json. secret are okay to store. the import function should be separate function for use in admin page.
 
-- [ ] add reset projects table script. should not delete created droplets record. for admin to view and delete droplets that created before the reset.
+- [x] add reset projects table script. should not delete created droplets record. for admin to view and delete droplets that created before the reset.
 
-- [ ] add new admin page for view created droplets. get by fetch DO API. should have info, add button to destroy the droplet.
+- [x] add new admin page for view created droplets. get by fetch DO API. should have info, add button to destroy the droplet.
 
-- [ ] add new page for import projects.json to DB. with input text area for paste json. add server side validation. if success show success message and reload table.
+- [x] add new page for import projects.json to DB. with input text area for paste json. add server side validation. if success show success message and reload table.
 
 ---
 

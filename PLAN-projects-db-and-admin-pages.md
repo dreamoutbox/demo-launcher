@@ -71,16 +71,16 @@ Build/test: `pnpm test` (Vitest), `pnpm types` if `wrangler.jsonc` bindings chan
   - [x] Update `public/admin/navbar.js` to include the `Droplets` link.
 - Done when: Navigating to `/admin/droplets` lists droplets from `GET /api/admin/droplets` and destroys a droplet on click; `pnpm test` passes.
 
-### Phase 5: Admin Page for Importing `projects.json` to DB [STATUS: TODO]
+### Phase 5: Admin Page for Importing `projects.json` to DB [STATUS: DONE]
 - Goal: Add `/admin/import_projects` (`public/admin/import_projects.html` + `public/admin/import_projects.js`) to paste and import `projects.json` with validation and view/reset current DB projects.
 - Tasks:
-  - [ ] Create `public/admin/import_projects.html` and `public/admin/import_projects.js` using `public/main.css` and `<admin-nav></admin-nav>`:
+  - [x] Create `public/admin/import_projects.html` and `public/admin/import_projects.js` using `public/main.css` and `<admin-nav></admin-nav>`:
     - Textarea for pasting `projects.json` content, `Import Projects` submit button, and `Reset Projects Table` button.
     - Displays server-side validation error message in red or success message in green upon import.
     - Displays a table of currently stored projects fetched from `GET /api/admin/projects` (ID, Name, Repo URL, Branch, App Port, Healthcheck, Size, Firewall Ports, Raw JSON / extra fields), reloading automatically after import or reset.
-  - [ ] Add friendly redirect `/admin/import_projects` -> `/admin/import_projects.html` in `src/index.ts`.
-  - [ ] Update `public/admin/navbar.js` to include the `Import Projects` link.
-  - [ ] Update `TODO.md` (tick L49-L60) and `README.md` with instructions for `projects.template.json` -> `projects.json` and the new scripts/admin pages.
+  - [x] Add friendly redirect `/admin/import_projects` -> `/admin/import_projects.html` in `src/index.ts`.
+  - [x] Update `public/admin/navbar.js` to include the `Import Projects` link.
+  - [x] Update `TODO.md` (tick L49-L60) and `README.md` with instructions for `projects.template.json` -> `projects.json` and the new scripts/admin pages.
 - Done when: Pasting valid JSON into `/admin/import_projects` saves to D1, shows success message, and reloads the projects table; invalid JSON/fields show server validation errors; `pnpm test` passes.
 
 ## Unknowns, Risks, Assumptions

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Import Projects - Demo Launcher Admin</title>
+  <link rel="stylesheet" href="/main.css" />
+</head>
+
+<body>
+  <div class="container container-wide">
+    <admin-nav></admin-nav>
+
+    <h1>Import Projects</h1>
+
+    <div id="feedback-msg" class="toolbar-message" style="margin: 8px 0; font-size: 14px;"></div>
+
+    <!-- Import Form -->
+    <form id="import-form" style="margin: 16px 0;">
+      <label for="projects-json-input" style="font-weight: bold; display: block; margin-bottom: 6px;">Paste projects.json content:</label>
+      <textarea id="projects-json-input" rows="12" style="width: 100%; font-family: monospace; font-size: 13px; padding: 10px; border: 1px solid #ccc; box-sizing: border-box;" placeholder='[&#10;  {&#10;    "id": "example-app",&#10;    "name": "Example App",&#10;    "repoUrl": "https://github.com/example/app",&#10;    "branch": "main",&#10;    "appPort": "8080"&#10;  }&#10;]'></textarea>
+      <div style="margin-top: 10px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+        <button type="submit" id="import-submit-btn">Import Projects</button>
+        <button type="button" id="reset-projects-btn" style="background-color: #fee; border-color: #c00; color: #900;">Reset Projects Table</button>
+      </div>
+    </form>
+
+    <!-- Stored Projects Table -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin: 24px 0 8px;">
+      <h2>Current Stored Projects (<span id="projects-count">0</span>)</h2>
+      <button type="button" id="refresh-table-btn" class="btn-sm">Refresh Table</button>
+    </div>
+
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Repository</th>
+            <th>Branch</th>
+            <th>Ports</th>
+            <th>Size</th>
+            <th>Raw Details</th>
+          </tr>
+        </thead>
+        <tbody id="projects-tbody">
+          <tr>
+            <td colspan="7">Loading stored projects...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script type="module" src="/admin/navbar.js"></script>
+  <script type="module" src="/admin/import_projects.js"></script>
+</body>
+
+</html>

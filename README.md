@@ -24,7 +24,18 @@ Each demo is stopped after one hour. A scheduled Worker runs every five minutes,
 
 ## Configure Projects
 
-Edit [`src/projects.json`](src/projects.json) and replace the example GitHub URLs with the repositories you want to showcase. The repositories must be publicly cloneable by a new droplet.
+Projects are stored in the D1 database (`projects` table).
+
+1. Copy [`projects.template.json`](projects.template.json) to `projects.json` at the repository root:
+   ```sh
+   cp projects.template.json projects.json
+   ```
+   (`projects.json` is gitignored so local overrides and secret credentials are never committed).
+
+2. Import projects into D1 using either method:
+   - **CLI Script:** Run `./dev-import-projects.sh [path/to/projects.json]` to import directly via the admin API.
+   - **Admin UI:** Visit `/admin/import_projects` in your browser, paste the JSON content into the textarea, and submit.
+   - **Reset:** Run `./dev-reset-projects.sh` or click "Reset Projects Table" in the Admin UI to clear stored projects without deleting active droplets or demo records.
 
 Each project entry supports the following options:
 - `repoUrl`: Target Git repository URL.
@@ -33,6 +44,7 @@ Each project entry supports the following options:
 - `healthcheckPort` and `healthcheckPath`: Port and path checked during readiness probes.
 - `appPort`: Port on which the web application serves traffic.
 - `size`: Optional DigitalOcean droplet size override (e.g. `"s-1vcpu-2gb"`).
+- Any custom / secret variables (preserved in D1 and masked from public `/api/projects`).
 
 At startup, the droplet clones the repository (checking out the specified branch if configured) and runs `demo-launcher-entrypoint.sh` from its root if present; otherwise, it serves a basic placeholder page with Nginx.
 
@@ -110,5 +122,11 @@ Open the deployed Worker URL to browse the configured projects and request a dem
 - `GET /api/projects` returns projects and current demo statuses.
 - `POST /api/launch` accepts JSON such as `{"projectId":"awesome-shop-demo"}` and queues a launch request.
 - `GET /api/cron-cleanup` manually runs cleanup (requires admin key authentication). An optional `maxDemoTimeSeconds` query parameter sets the expiration threshold for testing.
+- `GET /api/admin/projects` lists full stored projects from D1 (admin key protected).
+- `POST /api/admin/projects/import` validates and imports project JSON into D1.
+- `POST /api/admin/projects/reset` resets the `projects` table without deleting droplets.
+- `GET /api/admin/droplets` lists all DigitalOcean account droplets.
+- `POST /api/admin/droplets/destroy` permanently destroys a droplet by ID and resets matching demo status.
+- Admin UI pages: `/admin/demo_list`, `/admin/droplets`, `/admin/import_projects`, and `/admin/action_log`.
 
 The launch endpoint responds with `202 Accepted`; provisioning continues asynchronously in the queue. Launching is split into two queue phases: `CREATE` persists the droplet id immediately, then `POLL_HEALTH` resolves the public IP and runs the health check. Queue retries resume an interrupted attempt, and `CREATE` finds an already-created droplet through its `launch-<attemptId>` tag. Non-retryable DigitalOcean 4xx responses, such as a droplet limit error, mark the demo `FAILED` and acknowledge the message instead of retrying. The UI polls project status until the droplet IP is available. Demos are publicly reachable at their droplet IP, so only add repositories suitable for public demonstration.
