@@ -68,6 +68,16 @@
 
 ---
 
+# 11/26/2026
+
+- [ ] add link to project <worker-url>/<project_id>
+
+- [ ] admin: add view /demo-launcher/startup.log in launched project droplet. 
+    - in web. at /admin/demo_list page.
+    - using TCP sockets https://developers.cloudflare.com/workers/runtime-apis/tcp-sockets/
+
+---
+
 # CHORE
 
 - [x] make admin page use basic main.css
